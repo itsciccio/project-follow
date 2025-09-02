@@ -6,7 +6,6 @@
 # =============================================================================
 
 # Instagram API credentials and curl commands
-curl_input.txt
 instagram_curl.txt
 *.curl
 *_credentials.txt
@@ -292,7 +291,6 @@ instagram_*.json
 instagram_*.csv
 instagram_*.txt
 !instagram_api_scraper.py
-!instagram_curl.txt.example
 
 # Example files (safe to commit)
 !*.example
@@ -341,12 +339,6 @@ debug_*.txt
 *.key
 *.crt
 *.csr
-*.pem
-*.p12
-*.pfx
-*.key
-*.crt
-*.csr
 
 # =============================================================================
 # FINAL NOTES
@@ -361,6 +353,4 @@ debug_*.txt
 # 6. Protects user privacy and data security
 
 # If you need to share example data, create .example files:
-# curl_input.txt.example
-# instagram_curl.txt.example
 # instagram_data_example/ 

@@ -46,21 +46,33 @@ def main():
     print("Instagram Follower Analysis - Complete Workflow")
     print("=" * 60)
     print("This script will run all three steps automatically:")
-    print("1. Format curl command from curl_input.txt")
+    print("1. Get Instagram credentials (session_id + csrf_token)")
     print("2. Scrape Instagram data")
     print("3. Compare followers and generate analysis")
     print()
     
     # Check prerequisites
     print("[CHECKING] Checking prerequisites...")
-    if not check_file_exists("curl_input.txt", "Input curl file"):
-        print("\n[ERROR] Please create 'curl_input.txt' with your Instagram curl command first!")
-        print("See README.md for instructions on how to get your curl command.")
-        return False
     
-    if not check_file_exists("save_curl_and_run.py", "Curl formatter script"):
-        print("\n[ERROR] Missing 'save_curl_and_run.py' script!")
-        return False
+    # Check if we have credentials
+    has_instagram_curl = os.path.exists("instagram_curl.txt")
+    
+    if not has_instagram_curl:
+        print("[INFO] No credentials found. Using simplified credentials input tool.")
+        print("[INFO] This tool only asks for session_id and csrf_token, then extracts user_id automatically.")
+        
+        # Automatically use the simplified credentials input
+        print("\n[INFO] Starting simplified credentials input...")
+        if not run_command("python get_instagram_credentials.py", "Credentials input"):
+            print("\n[ERROR] Credentials input failed! Cannot continue.")
+            return False
+        
+        # Check if instagram_curl.txt was created
+        if not check_file_exists("instagram_curl.txt", "Generated curl file"):
+            print("\n[ERROR] Credentials input failed! Generated curl file not created.")
+            return False
+    else:
+        print("[INFO] Found existing credentials file")
     
     if not check_file_exists("instagram_api_scraper.py", "Instagram scraper script"):
         print("\n[ERROR] Missing 'instagram_api_scraper.py' script!")
@@ -71,20 +83,6 @@ def main():
         return False
     
     print("\n[SUCCESS] All prerequisites found!")
-    
-    # Step 1: Format curl command
-    print("\n" + "="*60)
-    print("STEP 1: Formatting curl command...")
-    print("="*60)
-    
-    if not run_command("python save_curl_and_run.py", "Curl command formatting"):
-        print("\n[ERROR] Step 1 failed! Cannot continue.")
-        return False
-    
-    # Check if instagram_curl.txt was created
-    if not check_file_exists("instagram_curl.txt", "Formatted curl file"):
-        print("\n[ERROR] Step 1 failed! Formatted curl file not created.")
-        return False
     
     # Step 2: Scrape Instagram data
     print("\n" + "="*60)

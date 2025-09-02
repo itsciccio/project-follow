@@ -17,8 +17,7 @@ A simple tool to collect your Instagram followers/following data using Instagram
 - **Session information** and cookies are kept private
 
 ### **What's Protected (Never Committed):**
-- `curl_input.txt` - Your Instagram API credentials
-- `instagram_curl.txt` - Formatted credentials
+- `instagram_curl.txt` - Generated curl command with your credentials
 - `instagram_data/` - All collected follower/following data
 - Any files containing API keys, tokens, or personal data
 
@@ -29,13 +28,18 @@ A simple tool to collect your Instagram followers/following data using Instagram
 - Configuration templates
 
 ### **Example Files for Reference:**
-- `curl_input.txt.example` - Shows expected curl command format
 - `instagram_data_example/` - Shows output data structure
 - No real credentials or user data included
 
+### **Simplified Security Model:**
+- **Only 2 values needed**: session_id + csrf_token
+- **User ID extracted automatically** from session_id
+- **No manual curl commands** to copy/paste
+- **Reduced risk** of credential exposure
+
 ## 🚀 Quick Start
 
-### Option 1: Automated Workflow (Recommended)
+### Complete Automated Workflow (Recommended)
 ```bash
 # Run everything automatically with one command
 python run_instagram_analysis.py
@@ -43,43 +47,62 @@ python run_instagram_analysis.py
 
 **Or on Windows, double-click:** `run_instagram_analysis.bat`
 
-### Option 2: Manual Step-by-Step
-1. **Copy your curl command** from Instagram (see instructions below)
-2. **Paste it into `curl_input.txt`** file
-3. **Run the formatter:**
-   ```bash
-   python save_curl_and_run.py
-   ```
-4. **Run the scraper:**
-   ```bash
-   python instagram_api_scraper.py --curl-file instagram_curl.txt
-   ```
-5. **Run the comparison:**
-   ```bash
-   python compare_followers.py
-   ```
+**What happens automatically:**
+1. **Asks for your credentials** (session_id + csrf_token only)
+2. **Extracts your user ID** automatically from session_id
+3. **Scrapes your Instagram data** (followers + following)
+4. **Compares and analyzes** to find users who don't follow back
+
+### Manual Step-by-Step
+```bash
+# 1. Get credentials and generate curl command
+python get_instagram_credentials.py
+
+# 2. Run the scraper
+python instagram_api_scraper.py --curl-file instagram_curl.txt
+
+# 3. Compare followers
+python compare_followers.py
+```
 
 ## 📁 Files You Need
 
 - **`run_instagram_analysis.py`** - **🚀 Complete automated workflow runner**
 - **`run_instagram_analysis.bat`** - **Windows batch file for easy execution**
+- **`get_instagram_credentials.py`** - **🆕 Simplified credentials input (only 2 values!)**
+- **`get_credentials.bat`** - **Windows batch file for credentials input**
 - **`instagram_api_scraper.py`** - Collects your Instagram data
-- **`save_curl_and_run.py`** - Reads and formats your curl command
 - **`compare_followers.py`** - Compares the data and finds non-followers
-- **`curl_input.txt`** - **Put your Instagram curl command here**
-- **`instagram_curl.txt`** - **Auto-generated cleaned curl command**
+- **`instagram_curl.txt`** - **Auto-generated complete curl command**
 - **`instagram_data/`** - Directory containing your collected data
-- **`users_not_following_back.txt`** - Final list of users who don't follow back
+- **`users_not_following_back.txt`** - Final list of users who don't follow you back
 
 ## 🔑 Getting Your Instagram Credentials
 
-1. **Log into Instagram** in your browser
-2. **Go to your profile** and click "Followers"
-3. **Open Developer Tools** (F12) → Network tab
-4. **Find the API request** to `/api/v1/friendships/{user_id}/followers/`
-5. **Right-click** → "Copy as cURL"
-6. **Paste the entire curl command** into `curl_input.txt`
-7. **Run** `python save_curl_and_run.py` to format it
+### **Simplified Credentials Input (Only Method)**
+The tool only asks you for **2 values** and automatically extracts the rest:
+
+**🔑 Required (Only 2 values!):**
+- **CSRF Token** - Your CSRF token from cookies
+- **Session ID** - Your session ID from cookies
+
+**✨ Automatically Extracted:**
+- **User ID** - Extracted from your session ID (everything before the first `%`)
+
+**Example Session ID Format:**
+```
+410199922%3AA9IF5q64rDBksn%3A9%3AAYfA7EvS4XvKzqbub0EKcaiMW2w61TJFm8ojtHl2xg
+     ↑
+User ID: 410199922
+```
+
+### **How to Find These Values:**
+1. **Go to Instagram** → Your Profile → Followers
+2. **Open Developer Tools** (F12) → Application tab
+3. **Go to Cookies** → instagram.com
+4. **Look for these two cookies:**
+   - `csrf_token` - Your CSRF token
+   - `sessionid` - Your session ID (contains your user ID)
 
 ## 📊 Output
 
@@ -105,14 +128,19 @@ pip install requests
 
 ### Basic Usage
 ```bash
-# 1. Put your curl command in curl_input.txt
-# 2. Format the curl command
-python save_curl_and_run.py
+# Complete automated workflow (recommended)
+python run_instagram_analysis.py
+```
 
-# 3. Collect data
+### Manual Step-by-Step
+```bash
+# 1. Get credentials and generate curl command
+python get_instagram_credentials.py
+
+# 2. Run the scraper
 python instagram_api_scraper.py --curl-file instagram_curl.txt
 
-# 4. Compare data
+# 3. Compare followers
 python compare_followers.py
 ```
 

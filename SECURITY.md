@@ -4,7 +4,7 @@
 
 ### ✅ **Before Using the Tool**
 - [ ] **Never share your Instagram credentials** with anyone
-- [ ] **Don't commit** `curl_input.txt` or `instagram_curl.txt` to Git
+- [ ] **Don't commit** `instagram_curl.txt` to Git
 - [ ] **Don't commit** the `instagram_data/` directory to Git
 - [ ] **Use the `.gitignore` file** to automatically protect sensitive data
 
@@ -29,8 +29,7 @@
 - **Clean output** removes sensitive information from logs
 
 ### **File Security**
-- **`curl_input.txt`** - Contains your raw Instagram credentials
-- **`instagram_curl.txt`** - Contains formatted credentials
+- **`instagram_curl.txt`** - Contains generated curl command with your credentials
 - **`instagram_data/`** - Contains all collected user data
 - **All automatically ignored** by Git
 
@@ -52,7 +51,7 @@
 
 ### **Never Do This:**
 - ❌ Commit credentials to version control
-- ❌ Share your `curl_input.txt` file
+- ❌ Share your `instagram_curl.txt` file
 - ❌ Post analysis results publicly
 - ❌ Use the tool for commercial purposes
 - ❌ Violate Instagram's rate limits
@@ -67,7 +66,7 @@
 ## 🚀 Safe Usage Workflow
 
 1. **Get fresh Instagram credentials** (private browser session)
-2. **Put credentials in `curl_input.txt`** (never commit this file)
+2. **Provide only 2 values**: session_id + csrf_token
 3. **Run the tool** to collect and analyze data
 4. **Review results locally** (keep private)
 5. **Delete or secure** any temporary credential files
@@ -78,7 +77,8 @@
 ### **Environment Variables**
 For extra security, you can store credentials as environment variables:
 ```bash
-export INSTAGRAM_CURL="your_curl_command_here"
+export INSTAGRAM_SESSION_ID="your_session_id_here"
+export INSTAGRAM_CSRF_TOKEN="your_csrf_token_here"
 ```
 
 ### **Encrypted Storage**
