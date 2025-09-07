@@ -92,32 +92,36 @@ class InstagramAPIScraper:
         except Exception as e:
             print(f"Warning: Could not parse cookies: {e}")
     
-    def get_followers(self, max_count: Optional[int] = None) -> List[Dict]:
+    def _fetch_users(self, endpoint: str, max_count: Optional[int] = None) -> List[Dict]:
         """
-        Fetch all followers of the user.
+        Common method to fetch users (followers or following).
         
         Args:
-            max_count: Maximum number of followers to fetch (None for all)
+            endpoint: The API endpoint ('followers' or 'following')
+            max_count: Maximum number of users to fetch (None for all)
             
         Returns:
-            List of follower dictionaries
+            List of user dictionaries
         """
-        print(f"Fetching followers for user ID: {self.user_id}")
+        user_type = endpoint  # Use endpoint as user_type for display purposes
+        print(f"Fetching {user_type} for user ID: {self.user_id}")
         
-        followers = []
+        users = []
         max_id = None
-        count = 0
+        batch_count = 0
         
         while True:
             # Build URL
-            url = f'https://www.instagram.com/api/v1/friendships/{self.user_id}/followers/'
+            url = f'https://www.instagram.com/api/v1/friendships/{self.user_id}/{endpoint}/'
             params = {'count': 100}
             
             if max_id:
                 params['max_id'] = max_id
             
             try:
-                print(f"Fetching batch {len(followers) // 100 + 1}... (current count: {len(followers)})")
+                batch_count += 1
+                current_count = len(users)
+                print(f"Fetching batch {batch_count}... (current count: {current_count})")
                 
                 response = self.session.get(url, params=params)
                 response.raise_for_status()
@@ -127,15 +131,15 @@ class InstagramAPIScraper:
                 # Extract users from response
                 if 'users' in data:
                     batch_users = data['users']
-                    followers.extend(batch_users)
+                    users.extend(batch_users)
                     print(f"  Fetched {len(batch_users)} users in this batch")
                 else:
                     print(f"  No users found in response: {data}")
                     break
                 
                 # Check if we've reached the limit
-                if max_count and len(followers) >= max_count:
-                    followers = followers[:max_count]
+                if max_count and len(users) >= max_count:
+                    users = users[:max_count]
                     print(f"  Reached maximum count: {max_count}")
                     break
                 
@@ -160,8 +164,20 @@ class InstagramAPIScraper:
                 print(f"  Unexpected error: {e}")
                 break
         
-        print(f"Total followers fetched: {len(followers)}")
-        return followers
+        print(f"Total {user_type} fetched: {len(users)}")
+        return users
+    
+    def get_followers(self, max_count: Optional[int] = None) -> List[Dict]:
+        """
+        Fetch all followers of the user.
+        
+        Args:
+            max_count: Maximum number of followers to fetch (None for all)
+            
+        Returns:
+            List of follower dictionaries
+        """
+        return self._fetch_users('followers', max_count)
     
     def get_following(self, max_count: Optional[int] = None) -> List[Dict]:
         """
@@ -173,66 +189,7 @@ class InstagramAPIScraper:
         Returns:
             List of following dictionaries
         """
-        print(f"Fetching following for user ID: {self.user_id}")
-        
-        following = []
-        max_id = None
-        count = 0
-        
-        while True:
-            # Build URL
-            url = f'https://www.instagram.com/api/v1/friendships/{self.user_id}/following/'
-            params = {'count': 100}
-            
-            if max_id:
-                params['max_id'] = max_id
-            
-            try:
-                print(f"Fetching batch {len(following) // 100 + 1}... (current count: {len(following)})")
-                
-                response = self.session.get(url, params=params)
-                response.raise_for_status()
-                
-                data = response.json()
-                
-                # Extract users from response
-                if 'users' in data:
-                    batch_users = data['users']
-                    following.extend(batch_users)
-                    print(f"  Fetched {len(batch_users)} users in this batch")
-                else:
-                    print(f"  No users found in response: {data}")
-                    break
-                
-                # Check if we've reached the limit
-                if max_count and len(following) >= max_count:
-                    following = following[:max_count]
-                    print(f"  Reached maximum count: {max_count}")
-                    break
-                
-                # Check if there are more pages
-                if 'next_max_id' in data and data['next_max_id']:
-                    max_id = data['next_max_id']
-                    print(f"  Next max_id: {max_id[:20]}...")
-                else:
-                    print("  No more pages available")
-                    break
-                
-                # Rate limiting
-                time.sleep(self.request_delay)
-                
-            except requests.exceptions.RequestException as e:
-                print(f"  Error fetching batch: {e}")
-                break
-            except json.JSONDecodeError as e:
-                print(f"  Error parsing JSON response: {e}")
-                break
-            except Exception as e:
-                print(f"  Unexpected error: {e}")
-                break
-        
-        print(f"Total following fetched: {len(following)}")
-        return following
+        return self._fetch_users('following', max_count)
     
     def extract_usernames(self, users: List[Dict]) -> List[str]:
         """Extract usernames from user dictionaries."""
