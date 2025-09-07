@@ -31,7 +31,7 @@ from instagram_api_scraper import InstagramAPIScraper
 app = Flask(__name__)
 
 # Configuration
-MAX_CONCURRENT_JOBS = 1
+MAX_CONCURRENT_JOBS = 5
 JOB_CLEANUP_DELAY = 1800  # 30 minutes in seconds
 
 # Global state management
