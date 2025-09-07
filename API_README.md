@@ -120,25 +120,6 @@ POST /api/cleanup
 DELETE /api/job/{job_id}
 ```
 
-### Delete Job by Credentials (Recommended)
-```bash
-DELETE /api/job
-Content-Type: application/json
-
-{
-    "csrf_token": "your_csrf_token",
-    "session_id": "your_session_id"
-}
-```
-
-**Response**:
-```json
-{
-    "message": "Job deleted successfully",
-    "deleted_job_status": "completed",
-    "remaining_jobs": 2
-}
-```
 
 ## Testing
 
@@ -167,14 +148,6 @@ curl http://localhost:5000/api/status/your-job-id
 
 # Delete job by job ID
 curl -X DELETE http://localhost:5000/api/job/job-uuid-here
-
-# Delete job by credentials (recommended)
-curl -X DELETE http://localhost:5000/api/job \
-  -H "Content-Type: application/json" \
-  -d '{
-    "csrf_token": "your_token",
-    "session_id": "your_session"
-  }'
 ```
 
 ## Configuration

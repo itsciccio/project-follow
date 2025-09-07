@@ -286,6 +286,10 @@ def get_status(job_id):
     
     status = job_status[job_id].copy()
     
+    # Remove sensitive data
+    status.pop('session_id', None)
+    status.pop('csrf_token', None)
+    
     # Update queue position if still queued
     if status['status'] == 'queued':
         position = 1
@@ -309,7 +313,6 @@ def get_queue_status():
         'active_sessions': len(active_sessions),
         'max_concurrent': MAX_CONCURRENT_JOBS,
         'queued_jobs': len(job_queue),
-        'active_session_ids': list(active_sessions),
         'total_jobs_in_memory': len(job_status)
     })
 
@@ -330,7 +333,6 @@ def list_jobs():
     for job_id, status in job_status.items():
         jobs[job_id] = {
             'status': status['status'],
-            'session_id': status.get('session_id', 'unknown'),
             'created_at': status.get('created_at', 0),
             'position_in_queue': status.get('position_in_queue', 0)
         }
@@ -338,7 +340,7 @@ def list_jobs():
     return jsonify({
         'jobs': jobs,
         'total_jobs': len(jobs),
-        'active_sessions': list(active_sessions),
+        'active_sessions_count': len(active_sessions),
         'queue_length': len(job_queue)
     })
 
@@ -351,11 +353,16 @@ def debug_job(job_id):
             'job_id': job_id,
             'total_jobs': len(job_status),
             'all_job_ids': list(job_status.keys()),
-            'active_sessions': list(active_sessions),
+            'active_sessions_count': len(active_sessions),
             'queue_length': len(job_queue)
         }), 404
     
     job_info = job_status[job_id].copy()
+    
+    # Remove sensitive data
+    job_info.pop('session_id', None)
+    job_info.pop('csrf_token', None)
+    
     if 'started_at' in job_info:
         job_info['processing_time'] = time.time() - job_info['started_at']
     
@@ -412,70 +419,6 @@ def delete_job(job_id):
         'deleted_job_status': job_status_value,
         'remaining_jobs': len(job_status)
     })
-
-@app.route('/api/job', methods=['DELETE'])
-def delete_job_by_credentials():
-    """Delete a job using csrf_token and session_id"""
-    try:
-        data = request.json
-        
-        # Validate required fields
-        if not data:
-            return jsonify({'error': 'No JSON data provided'}), 400
-        
-        if 'csrf_token' not in data:
-            return jsonify({'error': 'csrf_token is required'}), 400
-        
-        if 'session_id' not in data:
-            return jsonify({'error': 'session_id is required'}), 400
-        
-        csrf_token = data['csrf_token']
-        session_id = data['session_id']
-        
-        # Find job by credentials
-        job_id = None
-        for jid, job_info in job_status.items():
-            if (job_info.get('csrf_token') == csrf_token and 
-                job_info.get('session_id') == session_id):
-                job_id = jid
-                break
-        
-        if not job_id:
-            return jsonify({'error': 'No job found for these credentials'}), 404
-        
-        job_info = job_status[job_id]
-        job_status_value = job_info['status']
-        
-        # Check if job is currently active (processing or queued)
-        if job_status_value in ['processing', 'queued']:
-            return jsonify({
-                'error': 'Cannot delete active job',
-                'message': 'Job is currently processing or queued. Wait for completion or stop the job first.',
-                'job_status': job_status_value
-            }), 409
-        
-        # Remove from active sessions if it was there
-        if session_id in active_sessions:
-            active_sessions.discard(session_id)
-        
-        # Remove from queue if it was there
-        for i, queued_job in enumerate(job_queue):
-            if queued_job['job_id'] == job_id:
-                job_queue.pop(i)
-                break
-        
-        # Delete the job
-        del job_status[job_id]
-        
-        return jsonify({
-            'message': f'Job deleted successfully',
-            'deleted_job_status': job_status_value,
-            'remaining_jobs': len(job_status)
-        })
-        
-    except Exception as e:
-        return jsonify({'error': f'Internal server error: {str(e)}'}), 500
-
 # Error handlers
 @app.errorhandler(404)
 def not_found(error):
@@ -505,7 +448,6 @@ if __name__ == '__main__':
     print("  GET  /api/jobs - List all jobs (debug)")
     print("  POST /api/cleanup - Clean up completed jobs")
     print("  DELETE /api/job/<job_id> - Delete specific job by job_id")
-    print("  DELETE /api/job - Delete job by credentials")
     print("=" * 60)
     print("Starting server on http://localhost:5000")
     print("=" * 60)
