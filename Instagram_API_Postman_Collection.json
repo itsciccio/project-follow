@@ -2,181 +2,292 @@
 	"info": {
 		"_postman_id": "instagram-follower-api",
 		"name": "Instagram Follower Analysis API",
-		"description": "API for analyzing Instagram followers and finding users who don't follow back. Supports both regular analysis and un-followers tracking. The job_id is returned from the analyze endpoints.",
+		"description": "API for analyzing Instagram followers and finding users who don't follow back. Now uses bot accounts for session management - users only need to provide target_user_id.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
 		{
-			"name": "Health Check",
-			"request": {
-				"method": "GET",
-				"header": [],
-				"url": {
-					"raw": "{{base_url}}/api/health",
-					"host": [
-						"{{base_url}}"
-					],
-					"path": [
-						"api",
-						"health"
-					]
+			"name": "Main API Server",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{main_api_url}}/api/health",
+							"host": [
+								"{{main_api_url}}"
+							],
+							"path": [
+								"api",
+								"health"
+							]
+						},
+						"description": "Check if the main API server is running and healthy. Also shows bot manager connection status."
+					},
+					"response": []
 				},
-				"description": "Check if the API server is running and healthy"
-			},
-			"response": []
+				{
+					"name": "Submit Analysis Job (Simplified)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"target_user_id\": \"123456789\"\n}"
+						},
+						"url": {
+							"raw": "{{main_api_url}}/api/analyze",
+							"host": [
+								"{{main_api_url}}"
+							],
+							"path": [
+								"api",
+								"analyze"
+							]
+						},
+						"description": "Submit a new Instagram follower analysis job. Only requires target_user_id - bot accounts handle session management automatically."
+					},
+					"response": []
+				},
+				{
+					"name": "Submit Un-followers Analysis Job (Simplified)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"target_user_id\": \"123456789\",\n    \"previous_followers\": [\n        \"username1\",\n        \"username2\",\n        \"username3\"\n    ]\n}"
+						},
+						"url": {
+							"raw": "{{main_api_url}}/api/analyze-unfollowers",
+							"host": [
+								"{{main_api_url}}"
+							],
+							"path": [
+								"api",
+								"analyze-unfollowers"
+							]
+						},
+						"description": "Submit a new Instagram un-followers analysis job. Compares previous followers list with current followers to find users who unfollowed."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Job Status",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{main_api_url}}/api/status/{{job_id}}",
+							"host": [
+								"{{main_api_url}}"
+							],
+							"path": [
+								"api",
+								"status",
+								"{{job_id}}"
+							]
+						},
+						"description": "Get the status of a job by job_id. The job_id is returned from the analyze endpoints."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Queue Status",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{main_api_url}}/api/queue",
+							"host": [
+								"{{main_api_url}}"
+							],
+							"path": [
+								"api",
+								"queue"
+							]
+						},
+						"description": "Get overall queue status (counts only, no sensitive data)"
+					},
+					"response": []
+				}
+			]
 		},
 		{
-			"name": "Submit Analysis Job",
-			"request": {
-				"method": "POST",
-				"header": [
-					{
-						"key": "Content-Type",
-						"value": "application/json"
-					}
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n    \"csrf_token\": \"{{csrf_token}}\",\n    \"session_id\": \"{{session_id}}\"\n}"
+			"name": "Bot Manager API",
+			"item": [
+				{
+					"name": "Bot Manager Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{bot_manager_url}}/api/bot/health",
+							"host": [
+								"{{bot_manager_url}}"
+							],
+							"path": [
+								"api",
+								"bot",
+								"health"
+							]
+						},
+						"description": "Check if the bot manager is running and healthy. Shows total bots and monitoring status."
+					},
+					"response": []
 				},
-				"url": {
-					"raw": "{{base_url}}/api/analyze",
-					"host": [
-						"{{base_url}}"
-					],
-					"path": [
-						"api",
-						"analyze"
-					]
+				{
+					"name": "Get Bot Status",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{bot_manager_url}}/api/bot/status",
+							"host": [
+								"{{bot_manager_url}}"
+							],
+							"path": [
+								"api",
+								"bot",
+								"status"
+							]
+						},
+						"description": "Get status of all bot slaves. Shows which bots are logged in, busy, healthy, and available."
+					},
+					"response": []
 				},
-				"description": "Submit a new Instagram follower analysis job. The user_id will be extracted automatically from the session_id."
-			},
-			"response": []
+				{
+					"name": "Request Bot Session",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{}"
+						},
+						"url": {
+							"raw": "{{bot_manager_url}}/api/bot/request",
+							"host": [
+								"{{bot_manager_url}}"
+							],
+							"path": [
+								"api",
+								"bot",
+								"request"
+							]
+						},
+						"description": "Request an available bot session. Returns bot session data including CSRF token, session ID, and cookies. This is used internally by the main API server."
+					},
+					"response": []
+				},
+				{
+					"name": "Release Bot Session",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"bot_id\": \"bot_1\"\n}"
+						},
+						"url": {
+							"raw": "{{bot_manager_url}}/api/bot/release",
+							"host": [
+								"{{bot_manager_url}}"
+							],
+							"path": [
+								"api",
+								"bot",
+								"release"
+							]
+						},
+						"description": "Release a bot session back to the pool. This is used internally by the main API server after completing a job."
+					},
+					"response": []
+				}
+			]
 		},
 		{
-			"name": "Submit Un-followers Analysis Job",
-			"request": {
-				"method": "POST",
-				"header": [
-					{
-						"key": "Content-Type",
-						"value": "application/json"
-					}
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n    \"csrf_token\": \"{{csrf_token}}\",\n    \"session_id\": \"{{session_id}}\",\n    \"previous_followers\": [\n        \"username1\",\n        \"username2\",\n        \"username3\"\n    ]\n}"
+			"name": "Legacy API (Old System)",
+			"item": [
+				{
+					"name": "Submit Analysis Job (Legacy)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"csrf_token\": \"{{csrf_token}}\",\n    \"session_id\": \"{{session_id}}\"\n}"
+						},
+						"url": {
+							"raw": "{{main_api_url}}/api/analyze",
+							"host": [
+								"{{main_api_url}}"
+							],
+							"path": [
+								"api",
+								"analyze"
+							]
+						},
+						"description": "Legacy endpoint - requires user's own session credentials. Use the simplified version above instead."
+					},
+					"response": []
 				},
-				"url": {
-					"raw": "{{base_url}}/api/analyze-unfollowers",
-					"host": [
-						"{{base_url}}"
-					],
-					"path": [
-						"api",
-						"analyze-unfollowers"
-					]
-				},
-				"description": "Submit a new Instagram un-followers analysis job. Compares previous followers list with current followers to find users who unfollowed. Returns both un-followers and current followers list for next comparison."
-			},
-			"response": []
-		},
-		{
-			"name": "Get Job Status",
-			"request": {
-				"method": "GET",
-				"header": [],
-				"url": {
-					"raw": "{{base_url}}/api/status/{{job_id}}",
-					"host": [
-						"{{base_url}}"
-					],
-					"path": [
-						"api",
-						"status",
-						"{{job_id}}"
-					]
-				},
-				"description": "Get the status of a job by job_id. The job_id is generated from your credentials using SHA256(csrf_token + ':' + session_id)[:16]"
-			},
-			"response": []
-		},
-		{
-			"name": "List All Jobs",
-			"request": {
-				"method": "GET",
-				"header": [],
-				"url": {
-					"raw": "{{base_url}}/api/jobs",
-					"host": [
-						"{{base_url}}"
-					],
-					"path": [
-						"api",
-						"jobs"
-					]
-				},
-				"description": "List all current jobs (for debugging). Shows job IDs, statuses, and queue information without sensitive data."
-			},
-			"response": []
-		},
-		{
-			"name": "Get Queue Status",
-			"request": {
-				"method": "GET",
-				"header": [],
-				"url": {
-					"raw": "{{base_url}}/api/queue",
-					"host": [
-						"{{base_url}}"
-					],
-					"path": [
-						"api",
-						"queue"
-					]
-				},
-				"description": "Get overall queue status (counts only, no sensitive data)"
-			},
-			"response": []
-		},
-		{
-			"name": "Cleanup Completed Jobs",
-			"request": {
-				"method": "POST",
-				"header": [],
-				"url": {
-					"raw": "{{base_url}}/api/cleanup",
-					"host": [
-						"{{base_url}}"
-					],
-					"path": [
-						"api",
-						"cleanup"
-					]
-				},
-				"description": "Manually clean up completed jobs (useful for testing)"
-			},
-			"response": []
-		},
-		{
-			"name": "Delete Job by Job ID",
-			"request": {
-				"method": "DELETE",
-				"header": [],
-				"url": {
-					"raw": "{{base_url}}/api/job/{{job_id}}",
-					"host": [
-						"{{base_url}}"
-					],
-					"path": [
-						"api",
-						"job",
-						"{{job_id}}"
-					]
-				},
-				"description": "Delete a specific job by its ID. Can only delete completed or failed jobs, not active ones."
-			},
-			"response": []
+				{
+					"name": "Submit Un-followers Analysis Job (Legacy)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"csrf_token\": \"{{csrf_token}}\",\n    \"session_id\": \"{{session_id}}\",\n    \"previous_followers\": [\n        \"username1\",\n        \"username2\",\n        \"username3\"\n    ]\n}"
+						},
+						"url": {
+							"raw": "{{main_api_url}}/api/analyze-unfollowers",
+							"host": [
+								"{{main_api_url}}"
+							],
+							"path": [
+								"api",
+								"analyze-unfollowers"
+							]
+						},
+						"description": "Legacy endpoint - requires user's own session credentials. Use the simplified version above instead."
+					},
+					"response": []
+				}
+			]
 		}
 	],
 	"event": [
@@ -201,24 +312,34 @@
 	],
 	"variable": [
 		{
-			"key": "base_url",
+			"key": "main_api_url",
 			"value": "http://localhost:5000",
-			"type": "string"
+			"type": "string",
+			"description": "Main API server URL"
 		},
 		{
-			"key": "csrf_token",
-			"value": "YOUR_CSRF_TOKEN_HERE",
-			"type": "string"
-		},
-		{
-			"key": "session_id",
-			"value": "YOUR_SESSION_ID_HERE",
-			"type": "string"
+			"key": "bot_manager_url",
+			"value": "http://localhost:5001",
+			"type": "string",
+			"description": "Bot manager API URL"
 		},
 		{
 			"key": "job_id",
 			"value": "YOUR_JOB_ID_HERE",
-			"type": "string"
+			"type": "string",
+			"description": "Job ID returned from analyze endpoints"
+		},
+		{
+			"key": "csrf_token",
+			"value": "YOUR_CSRF_TOKEN_HERE",
+			"type": "string",
+			"description": "Legacy - CSRF token for old API (not needed for new bot system)"
+		},
+		{
+			"key": "session_id",
+			"value": "YOUR_SESSION_ID_HERE",
+			"type": "string",
+			"description": "Legacy - Session ID for old API (not needed for new bot system)"
 		}
 	]
 }
