@@ -25,10 +25,12 @@ from pathlib import Path
 from flask import Flask, request, jsonify
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, WebDriverException
+from webdriver_manager.chrome import ChromeDriverManager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -64,28 +66,89 @@ class InstagramBotSlave:
         # Initialize browser
         self._setup_browser()
     
+    def _find_chrome_binary(self):
+        """Find Chrome binary on Windows."""
+        import platform
+        
+        if platform.system() != "Windows":
+            return None
+            
+        # Common Chrome installation paths on Windows
+        chrome_paths = [
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+            os.path.expanduser(r"~\AppData\Local\Google\Chrome\Application\chrome.exe"),
+            r"C:\Users\{}\AppData\Local\Google\Chrome\Application\chrome.exe".format(os.getenv('USERNAME', ''))
+        ]
+        
+        for path in chrome_paths:
+            if os.path.exists(path):
+                logger.info(f"Found Chrome at: {path}")
+                return path
+        
+        logger.error("Chrome not found in common locations")
+        return None
+
     def _setup_browser(self):
         """Setup Chrome browser with persistent user data directory."""
         try:
             chrome_options = Options()
             chrome_options.add_argument("--headless")
-            chrome_options.add_argument(f"--user-data-dir={self.config_dir / 'chrome_profile'}")
+            # Create unique user data directory for each bot
+            import uuid
+            unique_id = str(uuid.uuid4())[:8]
+            user_data_dir = self.config_dir / f'chrome_profile_{unique_id}'
+            chrome_options.add_argument(f"--user-data-dir={user_data_dir}")
+            
+            # Windows compatibility options
             chrome_options.add_argument("--no-sandbox")
             chrome_options.add_argument("--disable-dev-shm-usage")
             chrome_options.add_argument("--disable-gpu")
-            chrome_options.add_argument("--window-size=1920,1080")
+            chrome_options.add_argument("--disable-software-rasterizer")
+            chrome_options.add_argument("--disable-background-timer-throttling")
+            chrome_options.add_argument("--disable-backgrounding-occluded-windows")
+            chrome_options.add_argument("--disable-renderer-backgrounding")
+            chrome_options.add_argument("--disable-features=TranslateUI")
+            chrome_options.add_argument("--disable-ipc-flooding-protection")
+            chrome_options.add_argument("--disable-extensions")
+            chrome_options.add_argument("--disable-plugins")
+            chrome_options.add_argument("--disable-web-security")
+            chrome_options.add_argument("--allow-running-insecure-content")
+            chrome_options.add_argument("--disable-features=VizDisplayCompositor")
+            
+            # DevTools and automation options
+            chrome_options.add_argument("--remote-debugging-port=0")
             chrome_options.add_argument("--disable-blink-features=AutomationControlled")
             chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
             chrome_options.add_experimental_option('useAutomationExtension', False)
+            chrome_options.add_experimental_option("detach", True)
+            
+            # User agent
             chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36")
             
-            self.driver = webdriver.Chrome(options=chrome_options)
+            # Window size
+            chrome_options.add_argument("--window-size=1920,1080")
+            
+            # Find Chrome binary
+            chrome_binary = self._find_chrome_binary()
+            if chrome_binary:
+                chrome_options.binary_location = chrome_binary
+            
+            # Use webdriver-manager to automatically handle ChromeDriver
+            service = Service(ChromeDriverManager().install())
+            self.driver = webdriver.Chrome(service=service, options=chrome_options)
             self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
             
             logger.info(f"Bot {self.bot_id}: Browser initialized")
             
         except Exception as e:
-            logger.error(f"Bot {self.bot_id}: Failed to setup browser: {e}")
+            error_msg = str(e)
+            if "cannot find Chrome binary" in error_msg:
+                logger.error(f"Bot {self.bot_id}: Chrome browser not found!")
+                logger.error("Please install Google Chrome from: https://www.google.com/chrome/")
+                logger.error("Or install Chrome via winget: winget install Google.Chrome")
+            else:
+                logger.error(f"Bot {self.bot_id}: Failed to setup browser: {e}")
             raise
     
     def login(self) -> bool:

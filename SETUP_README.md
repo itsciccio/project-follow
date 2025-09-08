@@ -3,9 +3,16 @@
 ## Quick Setup
 
 ### 1. Install Dependencies
+
+**Install Python packages:**
 ```bash
 pip install -r requirements.txt
 ```
+
+**Install Google Chrome:**
+- Download from: https://www.google.com/chrome/
+- Or install via winget: `winget install Google.Chrome`
+- Chrome is required for the bot automation
 
 ### 2. Configure Bot Accounts
 ```bash
