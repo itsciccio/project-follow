@@ -197,8 +197,8 @@ class InstagramAPIScraper:
         for user in users:
             if 'username' in user:
                 usernames.append(user['username'])
-            elif 'user' in user and 'username' in user['user']:
-                usernames.append(user['user']['username'])
+            else:
+                print(f"Warning: No username found in user data: {user}")
         
         return usernames
     

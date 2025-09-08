@@ -10,6 +10,7 @@ Usage:
 
 Endpoints:
     POST /api/analyze - Submit new analysis job
+    POST /api/analyze-unfollowers - Submit new un-followers analysis job
     GET /api/status/<job_id> - Get job status
     GET /api/queue - Get queue status
     GET /api/health - Health check
@@ -141,6 +142,84 @@ class InstagramAnalyzerAPI:
             'analysis_completed_at': datetime.now().isoformat()
         }
     
+    def analyze_unfollowers(self, job_id: str, previous_followers: list) -> dict:
+        """
+        Run the Instagram un-followers analysis by comparing previous followers with current followers
+        
+        Args:
+            job_id: Unique identifier for this analysis job
+            previous_followers: List of previous follower usernames
+            
+        Returns:
+            dict: Analysis results with counts and new un-followers list
+            
+        Raises:
+            ValueError: If analysis fails
+        """
+        try:
+            print(f"[{job_id}] Starting Instagram un-followers analysis...")
+            
+            # Fetch current followers using service layer
+            current_followers = self._fetch_followers(job_id)
+            
+            # Business logic: find new un-followers
+            new_unfollowers = self._find_new_unfollowers(previous_followers, current_followers)
+            
+            # Format result for presentation layer
+            result = self._format_unfollowers_result(previous_followers, current_followers, new_unfollowers)
+            
+            print(f"[{job_id}] Un-followers analysis completed: {len(new_unfollowers)} new un-followers found")
+            return result
+            
+        except Exception as e:
+            print(f"[{job_id}] Un-followers analysis failed: {str(e)}")
+            raise e
+    
+    def _find_new_unfollowers(self, previous_followers: list, current_followers: list) -> list:
+        """
+        Business logic: find users who unfollowed (were in previous but not in current)
+        
+        Args:
+            previous_followers: List of previous follower usernames
+            current_followers: List of current follower data
+            
+        Returns:
+            list: Usernames of users who unfollowed
+        """
+        # Extract usernames from current followers using service layer
+        current_follower_usernames = self.scraper.extract_usernames(current_followers)
+        
+        # Business logic: find new un-followers
+        previous_set = set(previous_followers)
+        current_set = set(current_follower_usernames)
+        new_unfollowers = list(previous_set - current_set)
+        
+        return new_unfollowers
+    
+    def _format_unfollowers_result(self, previous_followers: list, current_followers: list, new_unfollowers: list) -> dict:
+        """
+        Format un-followers analysis results for presentation layer
+        
+        Args:
+            previous_followers: List of previous follower usernames
+            current_followers: List of current follower data
+            new_unfollowers: List of new un-follower usernames
+            
+        Returns:
+            dict: Formatted un-followers analysis results
+        """
+        # Extract usernames from current followers for the full list
+        current_follower_usernames = self.scraper.extract_usernames(current_followers)
+        
+        return {
+            'previous_followers_count': len(previous_followers),
+            'current_followers_count': len(current_followers),
+            'new_unfollowers_count': len(new_unfollowers),
+            'new_unfollowers': new_unfollowers,
+            'current_followers': current_follower_usernames,  # Full list for next comparison
+            'analysis_completed_at': datetime.now().isoformat()
+        }
+    
     @staticmethod
     def extract_user_id_from_session(session_id: str) -> str:
         """
@@ -192,11 +271,13 @@ def process_job(job_data: dict) -> None:
     Process a single job - runs in worker thread
     
     Args:
-        job_data: Dictionary containing job_id, session_id, and csrf_token
+        job_data: Dictionary containing job_id, session_id, csrf_token, and optional job_type and previous_followers
     """
     job_id = job_data['job_id']
     session_id = job_data['session_id']
     csrf_token = job_data['csrf_token']
+    job_type = job_data.get('job_type', 'analyze')  # Default to 'analyze' for backward compatibility
+    previous_followers = job_data.get('previous_followers', [])
     
     try:
         # Update status to processing
@@ -209,8 +290,11 @@ def process_job(job_data: dict) -> None:
         # Create controller with dependency injection
         analyzer = InstagramAnalyzerAPI(scraper)
         
-        # Run analysis
-        result = analyzer.analyze(job_id)
+        # Run analysis based on job type
+        if job_type == 'analyze_unfollowers':
+            result = analyzer.analyze_unfollowers(job_id, previous_followers)
+        else:  # Default to regular analyze
+            result = analyzer.analyze(job_id)
         
         # Update with results
         job_status[job_id].update({
@@ -354,6 +438,97 @@ def analyze_followers():
             'status': 'queued',
             'session_id': session_id,
             'user_id': user_id,  # Store extracted user_id for reference
+            'created_at': time.time(),
+            'position_in_queue': len(job_queue) + 1
+        }
+        
+        # Add to queue or start immediately
+        if len(active_sessions) < MAX_CONCURRENT_JOBS:
+            # Start immediately
+            active_sessions.add(session_id)
+            executor.submit(process_job, job_data)
+            job_status[job_id]['status'] = 'processing'
+            job_status[job_id]['position_in_queue'] = 0
+        else:
+            # Add to queue
+            job_queue.append(job_data)
+        
+        return jsonify({
+            'job_id': job_id,
+            'status': job_status[job_id]['status'],
+            'position_in_queue': job_status[job_id]['position_in_queue'],
+            'estimated_wait_time': estimate_wait_time(len(job_queue))
+        })
+        
+    except Exception as e:
+        return jsonify({'error': f'Internal server error: {str(e)}'}), 500
+
+@app.route('/api/analyze-unfollowers', methods=['POST'])
+def analyze_unfollowers():
+    """Submit a new Instagram un-followers analysis job"""
+    try:
+        data = request.json
+        
+        # Validate required fields
+        if not data:
+            return jsonify({'error': 'No JSON data provided'}), 400
+        
+        if 'csrf_token' not in data:
+            return jsonify({'error': 'csrf_token is required'}), 400
+        
+        if 'session_id' not in data:
+            return jsonify({'error': 'session_id is required'}), 400
+        
+        if 'previous_followers' not in data:
+            return jsonify({'error': 'previous_followers is required'}), 400
+        
+        session_id = data['session_id']
+        csrf_token = data['csrf_token']
+        previous_followers = data['previous_followers']
+        
+        # Validate previous_followers is a list
+        if not isinstance(previous_followers, list):
+            return jsonify({'error': 'previous_followers must be a list'}), 400
+        
+        # Validate previous_followers is not empty
+        if len(previous_followers) == 0:
+            return jsonify({'error': 'previous_followers cannot be empty'}), 400
+        
+        # Extract user_id from session_id
+        user_id = InstagramAnalyzerAPI.extract_user_id_from_session(session_id)
+        if not user_id:
+            return jsonify({'error': 'Could not extract user_id from session_id'}), 400
+        
+        # Check if there's already any job for this session (any status)
+        existing_job_id = find_job_for_session(session_id)
+        if existing_job_id:
+            existing_job = job_status[existing_job_id]
+            return jsonify({
+                'error': 'Job already exists',
+                'message': f'This account already has a job with status: {existing_job["status"]}',
+                'job_id': existing_job_id,
+                'status': existing_job['status']
+            }), 409
+        
+        # Generate random job ID
+        job_id = generate_job_id()
+        
+        # Create job data
+        job_data = {
+            'job_id': job_id,
+            'csrf_token': csrf_token,
+            'session_id': session_id,
+            'job_type': 'analyze_unfollowers',
+            'previous_followers': previous_followers,
+            'created_at': time.time()
+        }
+        
+        # Initialize status
+        job_status[job_id] = {
+            'status': 'queued',
+            'session_id': session_id,
+            'user_id': user_id,  # Store extracted user_id for reference
+            'job_type': 'analyze_unfollowers',
             'created_at': time.time(),
             'position_in_queue': len(job_queue) + 1
         }
@@ -543,6 +718,7 @@ if __name__ == '__main__':
     print("=" * 60)
     print("Available endpoints:")
     print("  POST /api/analyze - Submit new analysis job")
+    print("  POST /api/analyze-unfollowers - Submit new un-followers analysis job")
     print("  GET  /api/status/<job_id> - Get job status")
     print("  GET  /api/debug/<job_id> - Debug job with detailed info")
     print("  GET  /api/queue - Get queue status")

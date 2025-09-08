@@ -66,23 +66,20 @@ def compare_followers_following(followers_file, following_file, output_file):
         print(f"One-way Following Rate: {100 - mutual_percentage:.1f}%")
         print()
     
-    # Save the list of users who don't follow back
-    if not_following_back:
-        print(f"Saving {len(not_following_back)} users who don't follow back to '{output_file}'...")
-        
-        with open(output_file, 'w', encoding='utf-8') as f:
-            f.write("Users Who Don't Follow You Back\n")
-            f.write("=" * 40 + "\n")
-            f.write(f"Generated on: {__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-            f.write(f"Total count: {len(not_following_back)}\n\n")
-            
-            # Sort alphabetically for easier reading
+    # Save the list of users who don't follow back (always create the file)
+    print(f"Saving {len(not_following_back)} users who don't follow back to '{output_file}'...")
+    
+    with open(output_file, 'w', encoding='utf-8') as f:
+        if not_following_back:
+            # Sort alphabetically and write one username per line
             for username in sorted(not_following_back):
-                f.write(f"• {username}\n")
-        
-        print(f"✅ List saved to '{output_file}'")
-        print()
-        
+                f.write(f"{username}\n")
+        # If empty, create empty file (no content)
+    
+    print(f"✅ List saved to '{output_file}'")
+    print()
+    
+    if not_following_back:
         # Show first 20 users as preview
         print("First 20 users who don't follow back:")
         print("-" * 40)

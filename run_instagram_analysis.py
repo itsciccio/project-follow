@@ -158,7 +158,7 @@ def main():
             following_count = len(f.readlines())
         
         with open("instagram_data/users_not_following_back.txt", "r") as f:
-            not_following_count = len(f.readlines())
+            not_following_count = len([line.strip() for line in f if line.strip()])
         
         print(f"\nFinal Results:")
         print(f"   • Followers collected: {follower_count}")

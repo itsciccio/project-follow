@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "instagram-follower-api",
 		"name": "Instagram Follower Analysis API",
-		"description": "API for analyzing Instagram followers and finding users who don't follow back. The job_id is returned from the analyze endpoint.",
+		"description": "API for analyzing Instagram followers and finding users who don't follow back. Supports both regular analysis and un-followers tracking. The job_id is returned from the analyze endpoints.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
@@ -54,6 +54,34 @@
 			"response": []
 		},
 		{
+			"name": "Submit Un-followers Analysis Job",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"csrf_token\": \"{{csrf_token}}\",\n    \"session_id\": \"{{session_id}}\",\n    \"previous_followers\": [\n        \"username1\",\n        \"username2\",\n        \"username3\"\n    ]\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/analyze-unfollowers",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"analyze-unfollowers"
+					]
+				},
+				"description": "Submit a new Instagram un-followers analysis job. Compares previous followers list with current followers to find users who unfollowed. Returns both un-followers and current followers list for next comparison."
+			},
+			"response": []
+		},
+		{
 			"name": "Get Job Status",
 			"request": {
 				"method": "GET",
@@ -70,6 +98,25 @@
 					]
 				},
 				"description": "Get the status of a job by job_id. The job_id is generated from your credentials using SHA256(csrf_token + ':' + session_id)[:16]"
+			},
+			"response": []
+		},
+		{
+			"name": "List All Jobs",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/jobs",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"jobs"
+					]
+				},
+				"description": "List all current jobs (for debugging). Shows job IDs, statuses, and queue information without sensitive data."
 			},
 			"response": []
 		},
