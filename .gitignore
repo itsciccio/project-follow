@@ -37,10 +37,12 @@ results/
 
 # Data files (various formats)
 *.json
+!Instagram_API_Postman_Collection.json
 *.csv
 *.txt
 !requirements.txt
 !README.md
+!API_README.md
 !*.py
 !*.bat
 
