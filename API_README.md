@@ -2,6 +2,17 @@
 
 A production-ready REST API server for analyzing Instagram followers and finding users who don't follow you back. Built with Flask and proper MVC architecture.
 
+## Features
+
+- **Multi-user support**: Process multiple Instagram accounts simultaneously
+- **Session-based concurrency**: One job per Instagram session to avoid rate limiting
+- **Queue management**: Jobs are queued when server is at capacity
+- **Automatic cleanup**: Completed jobs are cleaned up after 5 minutes
+- **Real-time status**: Track job progress and queue position
+- **Instagram-safe**: Respects Instagram's rate limits and anti-bot measures
+- **Deterministic job IDs**: Job IDs are generated from your credentials, so you never lose access to your job
+- **Credential-based access**: Access your job using your csrf_token and session_id instead of remembering job IDs
+
 ## 🚀 Quick Start
 
 ### **Local Development:**
@@ -15,11 +26,12 @@ A production-ready REST API server for analyzing Instagram followers and finding
    python instagram_api_server.py
    ```
 
-3. **Test the API:**
+3. **Server will start on**: `http://localhost:5000`
+
+4. **Test the API:**
    ```bash
    curl http://localhost:5000/api/health
    ```
-
 
 ## 🏗️ Architecture
 
@@ -63,19 +75,31 @@ Content-Type: application/json
 GET /api/status/{job_id}
 ```
 
+**Note**: The `job_id` is generated from your credentials using the formula: `SHA256(csrf_token + ":" + session_id)[:16]`
+
+You can generate your job_id using this Python code:
+```python
+import hashlib
+csrf_token = "your_csrf_token"
+session_id = "your_session_id"
+job_id = hashlib.sha256(f"{csrf_token}:{session_id}".encode()).hexdigest()[:16]
+```
+
 **Response**:
 ```json
 {
-    "status": "completed",
+    "status": "queued|processing|completed|failed",
+    "session_id": "session_id",
+    "user_id": "user_id",
+    "created_at": 1234567890,
+    "position_in_queue": 0,
     "result": {
-        "followers_count": 1250,
-        "following_count": 890,
-        "unfollowers_count": 45,
-        "unfollowers": ["user1", "user2", "user3"],
-        "analysis_completed_at": "2024-01-15T10:30:00"
-    },
-    "created_at": 1705312200,
-    "processing_time": 45.2
+        "followers_count": 1000,
+        "following_count": 500,
+        "unfollowers_count": 50,
+        "unfollowers": ["user1", "user2", ...],
+        "analysis_completed_at": "2024-01-01T12:00:00"
+    }
 }
 ```
 
@@ -90,7 +114,8 @@ GET /api/queue
     "active_sessions": 2,
     "max_concurrent": 5,
     "queued_jobs": 3,
-    "total_jobs_in_memory": 8
+    "active_session_ids": ["session1", "session2"],
+    "total_jobs_in_memory": 5
 }
 ```
 
@@ -159,13 +184,18 @@ GET /api/jobs
 }
 ```
 
+### **Cleanup Completed Jobs**
+```bash
+POST /api/cleanup
+```
+
 ## 🔧 Configuration
 
 Edit these variables in `instagram_api_server.py`:
 
 ```python
 MAX_CONCURRENT_JOBS = 5        # Maximum concurrent Instagram sessions
-JOB_CLEANUP_DELAY = 1800       # Job cleanup delay in seconds (30 minutes)
+JOB_CLEANUP_DELAY = 300        # Job cleanup delay in seconds (5 minutes)
 ```
 
 ## 🔑 Getting Instagram Credentials
@@ -182,12 +212,14 @@ JOB_CLEANUP_DELAY = 1800       # Job cleanup delay in seconds (30 minutes)
    - `csrf_token` - Your CSRF token
    - `sessionid` - Your session ID
 
+Use the existing `get_instagram_credentials.py` script to help extract these.
+
 ## 📋 Job Lifecycle
 
 1. **Submit Job** → Job gets queued or starts immediately
 2. **Processing** → Instagram data is collected and analyzed
 3. **Completed** → Results are available via status endpoint
-4. **Cleanup** → Job is automatically removed after 30 minutes
+4. **Cleanup** → Job is automatically removed after 5 minutes
 
 ## 🚨 Error Handling
 
@@ -236,6 +268,8 @@ JOB_CLEANUP_DELAY = 1800       # Job cleanup delay in seconds (30 minutes)
 
 ### **Using curl:**
 ```bash
+# Health check
+curl http://localhost:5000/api/health
 # Submit job
 curl -X POST http://localhost:5000/api/analyze \
   -H "Content-Type: application/json" \
@@ -250,7 +284,6 @@ curl http://localhost:5000/api/status/your-job-id
 # Delete job by job ID
 curl -X DELETE http://localhost:5000/api/job/job-uuid-here
 ```
-
 
 ## 🔒 Security Features
 
@@ -280,7 +313,7 @@ curl http://localhost:5000/api/jobs
 ## ⚠️ Important Notes
 
 - **One job per session** - Each Instagram account can only have one active job
-- **Job cleanup** - Completed jobs are automatically removed after 30 minutes
+- **Job cleanup** - Completed jobs are automatically removed after 5 minutes
 - **Rate limiting** - Built-in delays to respect Instagram's API
 - **Session management** - Instagram sessions are tracked to prevent conflicts
 - **Error handling** - Comprehensive error management with detailed logging
@@ -290,7 +323,7 @@ curl http://localhost:5000/api/jobs
 ### **Common Issues:**
 
 **"Job not found"**
-- Job may have been cleaned up (30-minute timeout)
+- Job may have been cleaned up (5-minute timeout)
 - Check if job_id is correct
 - Use debug endpoint to see all current jobs
 
@@ -312,3 +345,10 @@ curl http://localhost:5000/api/jobs
 - **Main README** - Complete project overview
 - **Postman Collection** - Import for easy testing
 - **Security Guidelines** - Best practices for deployment
+
+## Architecture
+
+- **Single-threaded per session**: Each Instagram session gets one dedicated thread
+- **Concurrent sessions**: Multiple different sessions can run simultaneously
+- **Queue system**: Jobs wait in queue when server is at capacity
+- **Automatic cleanup**: Prevents memory bloat from old jobs

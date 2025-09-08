@@ -1,0 +1,177 @@
+{
+	"info": {
+		"_postman_id": "instagram-follower-api",
+		"name": "Instagram Follower Analysis API",
+		"description": "API for analyzing Instagram followers and finding users who don't follow back. The job_id is returned from the analyze endpoint.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Health Check",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/health",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"health"
+					]
+				},
+				"description": "Check if the API server is running and healthy"
+			},
+			"response": []
+		},
+		{
+			"name": "Submit Analysis Job",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"csrf_token\": \"{{csrf_token}}\",\n    \"session_id\": \"{{session_id}}\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/analyze",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"analyze"
+					]
+				},
+				"description": "Submit a new Instagram follower analysis job. The user_id will be extracted automatically from the session_id."
+			},
+			"response": []
+		},
+		{
+			"name": "Get Job Status",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/status/{{job_id}}",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"status",
+						"{{job_id}}"
+					]
+				},
+				"description": "Get the status of a job by job_id. The job_id is generated from your credentials using SHA256(csrf_token + ':' + session_id)[:16]"
+			},
+			"response": []
+		},
+		{
+			"name": "Get Queue Status",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/queue",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"queue"
+					]
+				},
+				"description": "Get overall queue status (counts only, no sensitive data)"
+			},
+			"response": []
+		},
+		{
+			"name": "Cleanup Completed Jobs",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/cleanup",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"cleanup"
+					]
+				},
+				"description": "Manually clean up completed jobs (useful for testing)"
+			},
+			"response": []
+		},
+		{
+			"name": "Delete Job by Job ID",
+			"request": {
+				"method": "DELETE",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/job/{{job_id}}",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"job",
+						"{{job_id}}"
+					]
+				},
+				"description": "Delete a specific job by its ID. Can only delete completed or failed jobs, not active ones."
+			},
+			"response": []
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:5000",
+			"type": "string"
+		},
+		{
+			"key": "csrf_token",
+			"value": "YOUR_CSRF_TOKEN_HERE",
+			"type": "string"
+		},
+		{
+			"key": "session_id",
+			"value": "YOUR_SESSION_ID_HERE",
+			"type": "string"
+		},
+		{
+			"key": "job_id",
+			"value": "YOUR_JOB_ID_HERE",
+			"type": "string"
+		}
+	]
+}
