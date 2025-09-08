@@ -1,0 +1,22 @@
+# Instagram Bot Configuration
+# Copy this file to bot_config.yaml and update with your actual bot credentials
+# 
+# IMPORTANT SECURITY NOTES:
+# - Never commit bot_config.yaml to version control
+# - Use dedicated Instagram accounts for bots (not your main account)
+# - Keep this file secure and restrict access
+# - Bot accounts should have no followers or very few
+
+bots:
+  - id: "bot_1"
+    username: "your_bot_username_1"  # Replace with your bot's Instagram username
+    password: "your_bot_password_1"  # Replace with your bot's Instagram password
+    description: "Primary bot account"
+    enabled: true
+    
+  # Add more bots as needed:
+  # - id: "bot_2"
+  #   username: "your_bot_username_2"
+  #   password: "your_bot_password_2"
+  #   description: "Secondary bot account"
+  #   enabled: true

@@ -281,6 +281,10 @@ settings.json
 .env.production
 .env.staging
 
+# Bot configuration with credentials
+bot_config.yaml
+bot_config.yml
+
 # =============================================================================
 # PROJECT SPECIFIC
 # =============================================================================

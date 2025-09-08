@@ -18,6 +18,7 @@ import pickle
 import logging
 import threading
 import requests
+import yaml
 from datetime import datetime, timedelta
 from typing import Dict, Optional, List, Tuple
 from pathlib import Path
@@ -310,17 +311,25 @@ class InstagramBotSlaveManager:
     Provides HTTP API for the main server to request bot sessions.
     """
     
-    def __init__(self, config_dir: str = "bot_config", port: int = 5001):
+    def __init__(self, config_file: str = "bot_config.yaml", config_dir: str = "bot_config"):
         """
         Initialize the bot slave manager.
         
         Args:
+            config_file: Path to YAML configuration file
             config_dir: Directory to store bot configurations
-            port: Port for the HTTP API
         """
+        self.config_file = Path(config_file)
         self.config_dir = Path(config_dir)
         self.config_dir.mkdir(exist_ok=True)
-        self.port = port
+        
+        # Load configuration
+        self.config = self._load_config()
+        
+        # Hardcoded settings - no configuration needed
+        self.port = 5001
+        self.health_check_interval = 1800  # 30 minutes
+        self.headless = True
         
         self.bot_slaves = {}
         self.monitoring_thread = None
@@ -330,8 +339,76 @@ class InstagramBotSlaveManager:
         self.app = Flask(__name__)
         self._setup_routes()
         
-        # Load existing bot configurations
-        self._load_bot_configurations()
+        # Load and initialize bot slaves from configuration
+        self._initialize_bot_slaves()
+    
+    def _load_config(self) -> dict:
+        """Load configuration from YAML file."""
+        try:
+            if not self.config_file.exists():
+                logger.error(f"Configuration file not found: {self.config_file}")
+                logger.info("Please create bot_config.yaml with your bot credentials")
+                return {}
+            
+            with open(self.config_file, 'r') as f:
+                config = yaml.safe_load(f)
+            
+            logger.info(f"Configuration loaded from {self.config_file}")
+            return config
+            
+        except yaml.YAMLError as e:
+            logger.error(f"Error parsing YAML configuration: {e}")
+            return {}
+        except Exception as e:
+            logger.error(f"Error loading configuration: {e}")
+            return {}
+    
+    def _initialize_bot_slaves(self):
+        """Initialize bot slaves from configuration."""
+        bots_config = self.config.get('bots', [])
+        
+        if not bots_config:
+            logger.warning("No bots configured in bot_config.yaml")
+            return
+        
+        logger.info(f"Initializing {len(bots_config)} bot slaves from configuration...")
+        
+        for bot_config in bots_config:
+            if not bot_config.get('enabled', True):
+                logger.info(f"Skipping disabled bot: {bot_config.get('id', 'unknown')}")
+                continue
+            
+            bot_id = bot_config.get('id')
+            username = bot_config.get('username')
+            password = bot_config.get('password')
+            description = bot_config.get('description', 'No description')
+            
+            if not all([bot_id, username, password]):
+                logger.error(f"Invalid bot configuration: {bot_config}")
+                continue
+            
+            logger.info(f"Adding bot slave: {bot_id} ({description})")
+            
+            try:
+                # Create bot slave
+                bot_slave = InstagramBotSlave(
+                    bot_id=bot_id,
+                    username=username,
+                    password=password,
+                    config_dir=str(self.config_dir)
+                )
+                
+                # Attempt login
+                if bot_slave.login():
+                    self.bot_slaves[bot_id] = bot_slave
+                    logger.info(f"✅ Bot {bot_id} added and logged in successfully")
+                else:
+                    logger.error(f"❌ Failed to login bot {bot_id}")
+                    
+            except Exception as e:
+                logger.error(f"❌ Failed to initialize bot {bot_id}: {e}")
+        
+        logger.info(f"Successfully initialized {len(self.bot_slaves)} bot slaves")
     
     def add_bot_slave(self, bot_id: str, username: str, password: str) -> bool:
         """
@@ -395,10 +472,13 @@ class InstagramBotSlaveManager:
             self.bot_slaves[bot_id].last_activity = datetime.now()
             logger.info(f"Bot {bot_id} released back to pool")
     
-    def start_monitoring(self, check_interval: int = 1800):
+    def start_monitoring(self, check_interval: int = None):
         """Start monitoring bot health."""
         if self.is_monitoring:
             return
+        
+        if check_interval is None:
+            check_interval = self.health_check_interval
         
         self.is_monitoring = True
         self.monitoring_thread = threading.Thread(
@@ -553,17 +633,31 @@ class InstagramBotSlaveManager:
 
 def main():
     """Main function for running the bot slave manager."""
-    print("Instagram Bot Slave Manager")
-    print("=" * 40)
+    print("Instagram Bot Manager")
+    print("=" * 30)
     
-    # Initialize manager
-    manager = InstagramBotSlaveManager(port=5001)
+    # Check if configuration file exists
+    config_file = "bot_config.yaml"
+    if not Path(config_file).exists():
+        print(f"❌ Configuration file not found: {config_file}")
+        print("Please create bot_config.yaml with your bot credentials")
+        print("Copy bot_config.yaml.example and update with your credentials")
+        return
     
-    # Add bot slaves (you'll need to provide real credentials)
-    print("Adding bot slaves...")
+    # Initialize manager with configuration
+    print(f"Loading configuration from {config_file}...")
+    manager = InstagramBotSlaveManager(config_file=config_file)
     
-    # Example: Add a bot slave
-    # manager.add_bot_slave("bot_1", "your_bot_username", "your_bot_password")
+    if not manager.bot_slaves:
+        print("❌ No bot slaves were successfully initialized")
+        print("Please check your bot_config.yaml file and bot credentials")
+        return
+    
+    print(f"✅ Successfully initialized {len(manager.bot_slaves)} bot slaves")
+    print("🌐 Bot manager running on port 5001")
+    print("📡 Main API server should connect to: http://localhost:5001")
+    print("Press Ctrl+C to stop")
+    print("=" * 30)
     
     # Start the manager
     manager.run()
