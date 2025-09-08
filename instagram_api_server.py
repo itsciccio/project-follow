@@ -45,49 +45,42 @@ def generate_job_id():
     return str(uuid.uuid4())
 
 class InstagramAnalyzerAPI:
-    def __init__(self, csrf_token, session_id):
-        self.csrf_token = csrf_token
-        self.session_id = session_id
+    """Controller class for Instagram follower analysis business logic"""
     
-    def analyze(self, job_id):
-        """Run the Instagram follower analysis"""
+    def __init__(self, scraper: InstagramAPIScraper):
+        """
+        Initialize with dependency injection
+        
+        Args:
+            scraper: InstagramAPIScraper instance for data access
+        """
+        self.scraper = scraper
+    
+    def analyze(self, job_id: str) -> dict:
+        """
+        Run the Instagram follower analysis
+        
+        Args:
+            job_id: Unique identifier for this analysis job
+            
+        Returns:
+            dict: Analysis results with counts and unfollowers list
+            
+        Raises:
+            ValueError: If analysis fails
+        """
         try:
-            # Extract user_id from session_id
-            user_id = self.extract_user_id_from_session(self.session_id)
+            print(f"[{job_id}] Starting Instagram follower analysis...")
             
-            if not user_id:
-                raise ValueError("Could not extract user_id from session")
+            # Fetch data using service layer
+            followers = self._fetch_followers(job_id)
+            following = self._fetch_following(job_id)
             
-            # Create scraper instance
-            scraper = InstagramAPIScraper(
-                user_id=user_id,
-                csrf_token=self.csrf_token,
-                cookies=f"sessionid={self.session_id}"
-            )
+            # Business logic: find unfollowers
+            unfollowers = self._find_unfollowers(followers, following)
             
-            # Fetch followers and following
-            print(f"[{job_id}] Starting follower analysis...")
-            followers = scraper.get_followers()
-            
-            print(f"[{job_id}] Starting following analysis...")
-            following = scraper.get_following()
-            
-            # Extract usernames
-            follower_usernames = scraper.extract_usernames(followers)
-            following_usernames = scraper.extract_usernames(following)
-            
-            # Find users not following back
-            follower_set = set(follower_usernames)
-            following_set = set(following_usernames)
-            unfollowers = list(following_set - follower_set)
-            
-            result = {
-                'followers_count': len(followers),
-                'following_count': len(following),
-                'unfollowers_count': len(unfollowers),
-                'unfollowers': unfollowers,
-                'analysis_completed_at': datetime.now().isoformat()
-            }
+            # Format result for presentation layer
+            result = self._format_analysis_result(followers, following, unfollowers)
             
             print(f"[{job_id}] Analysis completed: {len(unfollowers)} unfollowers found")
             return result
@@ -96,9 +89,69 @@ class InstagramAnalyzerAPI:
             print(f"[{job_id}] Analysis failed: {str(e)}")
             raise e
     
+    def _fetch_followers(self, job_id: str) -> list:
+        """Fetch followers using service layer"""
+        print(f"[{job_id}] Fetching followers...")
+        return self.scraper.get_followers()
+    
+    def _fetch_following(self, job_id: str) -> list:
+        """Fetch following using service layer"""
+        print(f"[{job_id}] Fetching following...")
+        return self.scraper.get_following()
+    
+    def _find_unfollowers(self, followers: list, following: list) -> list:
+        """
+        Business logic: find users who don't follow back
+        
+        Args:
+            followers: List of follower data
+            following: List of following data
+            
+        Returns:
+            list: Usernames of users who don't follow back
+        """
+        # Extract usernames using service layer
+        follower_usernames = self.scraper.extract_usernames(followers)
+        following_usernames = self.scraper.extract_usernames(following)
+        
+        # Business logic: find unfollowers
+        follower_set = set(follower_usernames)
+        following_set = set(following_usernames)
+        unfollowers = list(following_set - follower_set)
+        
+        return unfollowers
+    
+    def _format_analysis_result(self, followers: list, following: list, unfollowers: list) -> dict:
+        """
+        Format analysis results for presentation layer
+        
+        Args:
+            followers: List of follower data
+            following: List of following data
+            unfollowers: List of unfollower usernames
+            
+        Returns:
+            dict: Formatted analysis results
+        """
+        return {
+            'followers_count': len(followers),
+            'following_count': len(following),
+            'unfollowers_count': len(unfollowers),
+            'unfollowers': unfollowers,
+            'analysis_completed_at': datetime.now().isoformat()
+        }
+    
     @staticmethod
-    def extract_user_id_from_session(session_id):
-        """Extract user ID from session ID (everything before the first %)"""
+    def extract_user_id_from_session(session_id: str) -> str:
+        """
+        Extract user ID from session ID (everything before the first %)
+        
+        Args:
+            session_id: Instagram session ID
+            
+        Returns:
+            str: User ID or None if invalid
+        """
         try:
             user_id = session_id.split('%')[0]
             if user_id.isdigit():
@@ -108,21 +161,55 @@ class InstagramAnalyzerAPI:
         except:
             return None
 
-def process_job(job_data):
-    """Process a single job - runs in worker thread"""
+def create_scraper(csrf_token: str, session_id: str) -> InstagramAPIScraper:
+    """
+    Factory function to create InstagramAPIScraper with proper configuration
+    
+    Args:
+        csrf_token: Instagram CSRF token
+        session_id: Instagram session ID
+        
+    Returns:
+        InstagramAPIScraper: Configured scraper instance
+        
+    Raises:
+        ValueError: If user_id cannot be extracted from session_id
+    """
+    # Extract user_id from session_id
+    user_id = InstagramAnalyzerAPI.extract_user_id_from_session(session_id)
+    if not user_id:
+        raise ValueError("Could not extract user_id from session_id")
+    
+    # Create service layer (Model)
+    return InstagramAPIScraper(
+        user_id=user_id,
+        csrf_token=csrf_token,
+        cookies=f"sessionid={session_id}"
+    )
+
+def process_job(job_data: dict) -> None:
+    """
+    Process a single job - runs in worker thread
+    
+    Args:
+        job_data: Dictionary containing job_id, session_id, and csrf_token
+    """
     job_id = job_data['job_id']
     session_id = job_data['session_id']
+    csrf_token = job_data['csrf_token']
     
     try:
         # Update status to processing
         job_status[job_id]['status'] = 'processing'
         job_status[job_id]['started_at'] = time.time()
         
-        # Create analyzer and run
-        analyzer = InstagramAnalyzerAPI(
-            job_data['csrf_token'], 
-            job_data['session_id']
-        )
+        # Create service layer (Model) - only create what we need
+        scraper = create_scraper(csrf_token, session_id)
+        
+        # Create controller with dependency injection
+        analyzer = InstagramAnalyzerAPI(scraper)
+        
+        # Run analysis
         result = analyzer.analyze(job_id)
         
         # Update with results
@@ -132,10 +219,25 @@ def process_job(job_data):
             'completed_at': time.time()
         })
         
-    except Exception as e:
+        print(f"[{job_id}] Job completed successfully")
+        
+    except ValueError as e:
+        # Handle validation errors (e.g., invalid session_id)
+        error_msg = f"Validation error: {str(e)}"
+        print(f"[{job_id}] {error_msg}")
         job_status[job_id].update({
             'status': 'failed',
-            'error': str(e),
+            'error': error_msg,
+            'failed_at': time.time()
+        })
+        
+    except Exception as e:
+        # Handle unexpected errors
+        error_msg = f"Unexpected error: {str(e)}"
+        print(f"[{job_id}] {error_msg}")
+        job_status[job_id].update({
+            'status': 'failed',
+            'error': error_msg,
             'failed_at': time.time()
         })
     
