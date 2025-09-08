@@ -37,6 +37,7 @@ results/
 
 # Data files (various formats)
 *.json
+!Instagram_API_Postman_Collection.json
 *.csv
 *.txt
 !requirements.txt
@@ -288,6 +289,7 @@ settings.json
 *_report.txt
 *_summary.txt
 instagram_*.json
+!Instagram_API_Postman_Collection.json
 instagram_*.csv
 instagram_*.txt
 !instagram_api_scraper.py
