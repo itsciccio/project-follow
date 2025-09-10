@@ -16,10 +16,9 @@ import json
 import time
 import logging
 import threading
-import requests
 import yaml
 from datetime import datetime, timedelta
-from typing import Dict, Optional, List, Tuple
+from typing import Dict, Optional, List
 from pathlib import Path
 from flask import Flask, request, jsonify
 from selenium import webdriver
@@ -28,7 +27,7 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, WebDriverException
+from selenium.common.exceptions import TimeoutException
 from webdriver_manager.chrome import ChromeDriverManager
 
 # Configure logging
@@ -94,28 +93,16 @@ class InstagramBotSlave:
             chrome_options = Options()
             chrome_options.add_argument("--headless")
             
-            # Windows compatibility options
+            # Essential options for stability
             chrome_options.add_argument("--no-sandbox")
             chrome_options.add_argument("--disable-dev-shm-usage")
             chrome_options.add_argument("--disable-gpu")
-            chrome_options.add_argument("--disable-software-rasterizer")
-            chrome_options.add_argument("--disable-background-timer-throttling")
-            chrome_options.add_argument("--disable-backgrounding-occluded-windows")
-            chrome_options.add_argument("--disable-renderer-backgrounding")
-            chrome_options.add_argument("--disable-features=TranslateUI")
-            chrome_options.add_argument("--disable-ipc-flooding-protection")
             chrome_options.add_argument("--disable-extensions")
-            chrome_options.add_argument("--disable-plugins")
-            chrome_options.add_argument("--disable-web-security")
-            chrome_options.add_argument("--allow-running-insecure-content")
-            chrome_options.add_argument("--disable-features=VizDisplayCompositor")
             
-            # DevTools and automation options
-            chrome_options.add_argument("--remote-debugging-port=0")
+            # Anti-detection options
             chrome_options.add_argument("--disable-blink-features=AutomationControlled")
             chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
             chrome_options.add_experimental_option('useAutomationExtension', False)
-            chrome_options.add_experimental_option("detach", True)
             
             # User agent
             chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36")
@@ -149,16 +136,11 @@ class InstagramBotSlave:
         """Handle cookie consent dialog if present."""
         try:
             # Common selectors for cookie consent buttons
-            cookie_selectors = [  # Instagram specific
-                "//button[contains(text(), 'Allow all cookies')]",  # Exact Instagram text
-                "//button[contains(text(), 'Allow All Cookies')]",
+            cookie_selectors = [
+                "//button[contains(text(), 'Allow all cookies')]",  # Instagram specific
                 "//button[contains(text(), 'Accept All')]",
                 "//button[contains(text(), 'Accept')]",
-                "//button[contains(text(), 'Allow all')]",
-                "//button[contains(text(), 'Allow All')]",
-                "//button[@data-testid='cookie-accept-all']",
-                "//button[contains(@class, 'cookie-accept')]",
-                "//button[contains(@class, 'accept-all')]"
+                "//button[@data-testid='cookie-accept-all']"
             ]
             
             wait = WebDriverWait(self.driver, 5)
@@ -432,7 +414,6 @@ class InstagramBotSlaveManager:
         # Hardcoded settings - no configuration needed
         self.port = 5001
         self.health_check_interval = 1800  # 30 minutes
-        self.headless = True
         
         self.bot_slaves = {}
         self.monitoring_thread = None
@@ -710,21 +691,6 @@ class InstagramBotSlaveManager:
                 
         except Exception as e:
             logger.error(f"Failed to save bot configurations: {e}")
-    
-    def _load_bot_configurations(self):
-        """Load bot configurations from file."""
-        try:
-            config_file = self.config_dir / "bot_configurations.json"
-            if config_file.exists():
-                with open(config_file, 'r') as f:
-                    configs = json.load(f)
-                
-                # Note: Passwords are not saved for security
-                # Bots will need to be re-authenticated
-                logger.info(f"Loaded {len(configs)} bot configurations")
-                
-        except Exception as e:
-            logger.error(f"Failed to load bot configurations: {e}")
     
     def run(self, host='0.0.0.0', port=None):
         """Run the bot slave manager HTTP server."""
