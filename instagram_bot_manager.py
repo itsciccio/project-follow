@@ -14,7 +14,6 @@ Main API Server <---> Bot Slave Manager <---> Instagram Bot Accounts
 import os
 import json
 import time
-import pickle
 import logging
 import threading
 import requests
@@ -90,15 +89,10 @@ class InstagramBotSlave:
         return None
 
     def _setup_browser(self):
-        """Setup Chrome browser with persistent user data directory."""
+        """Setup Chrome browser without persistent user data directory."""
         try:
             chrome_options = Options()
             chrome_options.add_argument("--headless")
-            # Create unique user data directory for each bot
-            import uuid
-            unique_id = str(uuid.uuid4())[:8]
-            user_data_dir = self.config_dir / f'chrome_profile_{unique_id}'
-            chrome_options.add_argument(f"--user-data-dir={user_data_dir}")
             
             # Windows compatibility options
             chrome_options.add_argument("--no-sandbox")
@@ -151,12 +145,52 @@ class InstagramBotSlave:
                 logger.error(f"Bot {self.bot_id}: Failed to setup browser: {e}")
             raise
     
+    def _handle_cookie_consent(self):
+        """Handle cookie consent dialog if present."""
+        try:
+            # Common selectors for cookie consent buttons
+            cookie_selectors = [
+                "/html/body/div[3]/div[1]/div/div[2]/div/div/div/div/div[2]/div/button[1]",  # Instagram specific
+                "//button[contains(text(), 'Allow All Cookies')]",
+                "//button[contains(text(), 'Accept All')]",
+                "//button[contains(text(), 'Accept')]",
+                "//button[contains(text(), 'Allow all')]",
+                "//button[contains(text(), 'Allow All')]",
+                "//button[@data-testid='cookie-accept-all']",
+                "//button[contains(@class, 'cookie-accept')]",
+                "//button[contains(@class, 'accept-all')]"
+            ]
+            
+            wait = WebDriverWait(self.driver, 5)
+            
+            for selector in cookie_selectors:
+                try:
+                    cookie_button = wait.until(EC.element_to_be_clickable((By.XPATH, selector)))
+                    cookie_button.click()
+                    logger.info(f"Bot {self.bot_id}: Clicked cookie consent button")
+                    time.sleep(3)
+                    return
+                except TimeoutException:
+                    continue
+            
+            logger.info(f"Bot {self.bot_id}: No cookie consent dialog found")
+            
+        except Exception as e:
+            logger.warning(f"Bot {self.bot_id}: Error handling cookie consent: {e}")
+    
     def login(self) -> bool:
         """Login to Instagram."""
         try:
             logger.info(f"Bot {self.bot_id}: Attempting login...")
             
-            # Navigate to Instagram login page
+            # Navigate to Instagram main page first to handle cookie consent
+            self.driver.get("https://www.instagram.com/")
+            time.sleep(3)
+            
+            # Handle cookie consent dialog if present
+            self._handle_cookie_consent()
+            
+            # Now navigate to login page
             self.driver.get("https://www.instagram.com/accounts/login/")
             time.sleep(3)
             
@@ -179,20 +213,25 @@ class InstagramBotSlave:
             # Wait for login to complete
             time.sleep(5)
             
-            # Check if login was successful
-            if "instagram.com" in self.driver.current_url and "login" not in self.driver.current_url:
+            try:
                 # Extract session data
                 cookies = self.driver.get_cookies()
                 csrf_token = self._extract_csrf_token(cookies)
                 session_id = self._extract_session_id(cookies)
                 user_id = self._extract_user_id_from_session(session_id)
                 
+                logger.info(f"Bot {self.bot_id}: Extracted session data - CSRF: {csrf_token is not None}, SessionID: {session_id is not None}, UserID: {user_id is not None}")
+                
+                # Check if we have valid session data
+                if not csrf_token or not session_id:
+                    logger.error(f"Bot {self.bot_id}: Invalid session data - missing CSRF token or session ID")
+                    return False
+                
                 # Update session data
                 self.session_data = {
                     'csrf_token': csrf_token,
                     'session_id': session_id,
                     'user_id': user_id,
-                    'cookies': cookies,
                     'last_login': datetime.now().isoformat()
                 }
                 
@@ -204,8 +243,9 @@ class InstagramBotSlave:
                 
                 logger.info(f"Bot {self.bot_id}: Login successful")
                 return True
-            else:
-                logger.error(f"Bot {self.bot_id}: Login failed")
+                
+            except Exception as session_error:
+                logger.error(f"Bot {self.bot_id}: Error extracting session data: {session_error}")
                 return False
                 
         except Exception as e:
@@ -217,40 +257,18 @@ class InstagramBotSlave:
         try:
             logger.info(f"Bot {self.bot_id}: Refreshing session...")
             
-            # Load existing cookies
-            cookies = self._load_session_cookies()
-            if not cookies:
-                logger.warning(f"Bot {self.bot_id}: No saved cookies, attempting fresh login")
-                return self.login()
-            
-            # Navigate to Instagram and load cookies
-            self.driver.get("https://www.instagram.com/")
-            
-            # Clear existing cookies and load saved ones
-            self.driver.delete_all_cookies()
-            for cookie in cookies:
-                try:
-                    self.driver.add_cookie(cookie)
-                except Exception as e:
-                    logger.warning(f"Bot {self.bot_id}: Failed to add cookie: {e}")
-            
-            # Refresh page to apply cookies
-            self.driver.refresh()
-            time.sleep(3)
-            
-            # Check if session is still valid
+            # Check if current session is still valid
             if self._is_session_valid():
-                # Update session data
-                new_cookies = self.driver.get_cookies()
-                csrf_token = self._extract_csrf_token(new_cookies)
-                session_id = self._extract_session_id(new_cookies)
+                # Update session data with current cookies
+                cookies = self.driver.get_cookies()
+                csrf_token = self._extract_csrf_token(cookies)
+                session_id = self._extract_session_id(cookies)
                 user_id = self._extract_user_id_from_session(session_id)
                 
                 self.session_data = {
                     'csrf_token': csrf_token,
                     'session_id': session_id,
                     'user_id': user_id,
-                    'cookies': new_cookies,
                     'last_login': datetime.now().isoformat()
                 }
                 
@@ -279,7 +297,6 @@ class InstagramBotSlave:
             'csrf_token': self.session_data['csrf_token'],
             'session_id': self.session_data['session_id'],
             'user_id': self.session_data['user_id'],
-            'cookies': self.session_data['cookies'],
             'last_login': self.session_data['last_login']
         }
     
@@ -302,6 +319,9 @@ class InstagramBotSlave:
             # Try to access Instagram profile page
             self.driver.get("https://www.instagram.com/")
             time.sleep(2)
+            
+            # Handle cookie consent dialog if present
+            self._handle_cookie_consent()
             
             # Check if we're redirected to login page
             if "login" in self.driver.current_url:
@@ -347,19 +367,39 @@ class InstagramBotSlave:
             data_file = self.config_dir / "session_data.json"
             with open(data_file, 'w') as f:
                 json.dump(self.session_data, f, indent=2)
+            logger.info(f"Bot {self.bot_id}: Session data saved successfully")
         except Exception as e:
             logger.error(f"Bot {self.bot_id}: Failed to save session data: {e}")
+            raise
     
-    def _load_session_cookies(self) -> Optional[List[Dict]]:
-        """Load session cookies from file."""
+    def restart(self) -> bool:
+        """Restart the bot by closing current session and creating a new one."""
         try:
-            cookie_file = self.config_dir / "cookies.pkl"
-            if cookie_file.exists():
-                with open(cookie_file, 'rb') as f:
-                    return pickle.load(f)
+            logger.info(f"Bot {self.bot_id}: Restarting bot...")
+            
+            # Cleanup current session
+            self.cleanup()
+            
+            # Reset state
+            self.is_logged_in = False
+            self.session_data = {}
+            self.last_activity = None
+            self.is_busy = False
+            
+            # Setup new browser
+            self._setup_browser()
+            
+            # Attempt login with new session
+            if self.login():
+                logger.info(f"Bot {self.bot_id}: Restart successful")
+                return True
+            else:
+                logger.error(f"Bot {self.bot_id}: Restart failed - login unsuccessful")
+                return False
+                
         except Exception as e:
-            logger.error(f"Bot {self.bot_id}: Failed to load cookies: {e}")
-        return None
+            logger.error(f"Bot {self.bot_id}: Restart error: {e}")
+            return False
     
     def cleanup(self):
         """Cleanup resources."""
@@ -466,7 +506,12 @@ class InstagramBotSlaveManager:
                     self.bot_slaves[bot_id] = bot_slave
                     logger.info(f"✅ Bot {bot_id} added and logged in successfully")
                 else:
-                    logger.error(f"❌ Failed to login bot {bot_id}")
+                    logger.warning(f"⚠️ Initial login failed for bot {bot_id}, attempting restart...")
+                    if bot_slave.restart():
+                        self.bot_slaves[bot_id] = bot_slave
+                        logger.info(f"✅ Bot {bot_id} restarted and logged in successfully")
+                    else:
+                        logger.error(f"❌ Failed to login bot {bot_id} even after restart")
                     
             except Exception as e:
                 logger.error(f"❌ Failed to initialize bot {bot_id}: {e}")
@@ -496,8 +541,15 @@ class InstagramBotSlaveManager:
                 logger.info(f"Bot slave {bot_id} added and logged in successfully")
                 return True
             else:
-                logger.error(f"Failed to login bot slave {bot_id}")
-                return False
+                logger.warning(f"Initial login failed for bot slave {bot_id}, attempting restart...")
+                if bot_slave.restart():
+                    self.bot_slaves[bot_id] = bot_slave
+                    self._save_bot_configurations()
+                    logger.info(f"Bot slave {bot_id} restarted and logged in successfully")
+                    return True
+                else:
+                    logger.error(f"Failed to login bot slave {bot_id} even after restart")
+                    return False
                 
         except Exception as e:
             logger.error(f"Failed to add bot slave {bot_id}: {e}")
@@ -556,10 +608,17 @@ class InstagramBotSlaveManager:
         """Monitor bot health in a separate thread."""
         while self.is_monitoring:
             try:
-                for bot_id, bot_slave in self.bot_slaves.items():
+                # Create a copy of items to avoid modifying dict during iteration
+                bots_to_check = list(self.bot_slaves.items())
+                for bot_id, bot_slave in bots_to_check:
                     if not bot_slave.is_healthy() and not bot_slave.is_busy:
                         logger.warning(f"Bot {bot_id} unhealthy, attempting refresh")
-                        bot_slave.refresh_session()
+                        if not bot_slave.refresh_session():
+                            logger.warning(f"Bot {bot_id} refresh failed, attempting restart")
+                            if not bot_slave.restart():
+                                logger.error(f"Bot {bot_id} restart failed, removing from pool")
+                                if bot_id in self.bot_slaves:
+                                    del self.bot_slaves[bot_id]
                 
                 time.sleep(check_interval)
                 
