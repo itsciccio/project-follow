@@ -149,8 +149,8 @@ class InstagramBotSlave:
         """Handle cookie consent dialog if present."""
         try:
             # Common selectors for cookie consent buttons
-            cookie_selectors = [
-                "/html/body/div[3]/div[1]/div/div[2]/div/div/div/div/div[2]/div/button[1]",  # Instagram specific
+            cookie_selectors = [  # Instagram specific
+                "//button[contains(text(), 'Allow all cookies')]",  # Exact Instagram text
                 "//button[contains(text(), 'Allow All Cookies')]",
                 "//button[contains(text(), 'Accept All')]",
                 "//button[contains(text(), 'Accept')]",
