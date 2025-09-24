@@ -47,37 +47,86 @@ python3 instagram_api_server.py
 
 ### 5. Test the API
 ```bash
+# Basic follower analysis
 curl -X POST http://localhost:5000/api/analyze \
-     -H 'Content-Type: application/json' \
-     -d '{"target_user_id": "123456789"}'
+  -H "Content-Type: application/json" \
+  -d '{"target_user_id": "123456789"}'
+
+# Not-following-back analysis
+curl -X POST http://localhost:5000/api/analyze-not-following-back \
+  -H "Content-Type: application/json" \
+  -d '{"target_user_id": "123456789"}'
 ```
 
 ## Bot Account Requirements
 
-- **Dedicated Instagram accounts** (not your main account)
-- **No followers** or very few followers
-- **Strong passwords**
-- **Accounts used only for this purpose**
+### **Creating Bot Accounts**
+- **Use dedicated Instagram accounts** (not your personal account)
+- **Accounts should have minimal followers** to avoid detection
+- **Use realistic usernames** and profile information
+- **Enable 2FA** if possible for security
 
-## Security Notes
+### **Bot Account Setup**
+1. Create new Instagram accounts
+2. Complete profile setup with realistic information
+3. Add a few posts to make accounts look legitimate
+4. Add the credentials to `bot_config.yaml`
+5. Test login through the bot manager
 
-- `bot_config.yaml` contains sensitive credentials
-- Never commit this file to version control
-- Keep the file secure and restrict access
-- The file is automatically ignored by git
+## Configuration Options
+
+### **Bot Manager Settings**
+```yaml
+manager:
+  port: 5001                    # Bot manager API port
+  health_check_interval: 1800   # Health check every 30 minutes
+  session_timeout: 86400        # Session timeout (24 hours)
+  max_concurrent_bots: 10       # Maximum concurrent bot sessions
+  headless: true                # Run Chrome in headless mode
+```
+
+### **Multiple Bot Accounts**
+```yaml
+bots:
+  - id: "bot_1"
+    username: "bot_account_1"
+    password: "password1"
+    description: "Primary bot account"
+    enabled: true
+  - id: "bot_2"
+    username: "bot_account_2"
+    password: "password2"
+    description: "Secondary bot account"
+    enabled: true
+```
 
 ## Troubleshooting
 
-**Bot login fails:**
-- Check username/password in `bot_config.yaml`
-- Verify the Instagram account isn't locked
-- Try logging in manually first
+### **Common Issues**
+- **Chrome not found**: Install Google Chrome and ensure it's in PATH
+- **Bot login fails**: Check credentials and account status
+- **Session expired**: Bot manager will automatically refresh sessions
+- **Rate limiting**: Use multiple bot accounts for load balancing
 
-**No bots available:**
-- Check bot status: `curl http://localhost:5001/api/bot/status`
-- Verify bots are enabled in configuration
-- Check bot manager logs
+### **Health Monitoring**
+```bash
+# Check bot manager health
+curl http://localhost:5001/api/bot/health
 
-**API server can't connect:**
-- Ensure bot manager is running on port 5001
-- Check bot manager health: `curl http://localhost:5001/api/bot/health`
+# Check main API health
+curl http://localhost:5000/api/health
+```
+
+## Production Deployment
+
+### **Security Considerations**
+- Keep `bot_config.yaml` secure and never commit to Git
+- Use environment variables for sensitive configuration
+- Implement proper authentication for API endpoints
+- Monitor bot account health regularly
+
+### **Scaling**
+- Add more bot accounts to `bot_config.yaml`
+- Use load balancing for multiple bot managers
+- Monitor system resources and performance
+- Implement proper logging and monitoring

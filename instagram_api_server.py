@@ -137,35 +137,44 @@ def process_job(job_data: dict) -> None:
     bot_data = None
     
     try:
-        # Update status to processing
-        job_status[job_id]['status'] = 'processing'
-        job_status[job_id]['started_at'] = time.time()
-        
         # Job is already submitted to bot manager queue
         # The bot manager will handle bot assignment and processing internally
         logger.info(f"[{job_id}] Job submitted to bot manager queue")
         
-        # Wait for job to be processed by bot manager
-        logger.info(f"[{job_id}] Waiting for bot manager to process job...")
-        
-        # Poll bot manager for job completion
+        # Poll bot manager for job status and completion
         max_wait_time = 300  # 5 minutes max wait
         wait_start = time.time()
+        processing_started = False
         
         while time.time() - wait_start < max_wait_time:
             # Check job status in bot manager
             bot_status = get_job_status_from_bot_manager(job_id)
             logger.info(f"[{job_id}] Bot manager status: {bot_status}")
             
-            if bot_status and bot_status.get('status') in ['completed', 'failed']:
-                if bot_status.get('status') == 'completed':
-                    result = bot_status.get('result', {})
-                    logger.info(f"[{job_id}] Job completed by bot manager")
-                else:
-                    error_msg = bot_status.get('error', 'Unknown error')
-                    logger.error(f"[{job_id}] Job failed in bot manager: {error_msg}")
-                    raise ValueError(f"Bot manager error: {error_msg}")
-                break
+            if bot_status:
+                bot_status_type = bot_status.get('status')
+                
+                # Update local status based on bot manager status
+                if bot_status_type == 'queued':
+                    job_status[job_id]['status'] = 'queued'
+                    job_status[job_id]['position_in_queue'] = bot_status.get('position_in_queue', 0)
+                    job_status[job_id]['estimated_wait_time'] = bot_status.get('estimated_wait_time', 0)
+                elif bot_status_type == 'processing' and not processing_started:
+                    # Job just started processing
+                    job_status[job_id]['status'] = 'processing'
+                    job_status[job_id]['started_at'] = time.time()
+                    job_status[job_id]['assigned_bot'] = bot_status.get('assigned_bot')
+                    processing_started = True
+                    logger.info(f"[{job_id}] Job started processing by bot {bot_status.get('assigned_bot')}")
+                elif bot_status_type in ['completed', 'failed']:
+                    if bot_status_type == 'completed':
+                        result = bot_status.get('result', {})
+                        logger.info(f"[{job_id}] Job completed by bot manager")
+                    else:
+                        error_msg = bot_status.get('error', 'Unknown error')
+                        logger.error(f"[{job_id}] Job failed in bot manager: {error_msg}")
+                        raise ValueError(f"Bot manager error: {error_msg}")
+                    break
             
             time.sleep(2)  # Wait 2 seconds before checking again
         else:
@@ -431,13 +440,38 @@ def get_status(job_id):
 
 @app.route('/api/queue', methods=['GET'])
 def get_queue_status():
-    """Get overall queue status"""
-    return jsonify({
-        'active_sessions': len(active_sessions),
-        'max_concurrent': MAX_CONCURRENT_JOBS,
-        'queued_jobs': len(job_queue),
-        'total_jobs_in_memory': len(job_status)
-    })
+    """Get overall queue status from bot manager"""
+    try:
+        # Get real status from bot manager
+        response = requests.get(f"{BOT_SLAVE_MANAGER_URL}/api/queue/status", timeout=5)
+        if response.status_code == 200:
+            bot_manager_status = response.json()
+            return jsonify({
+                'active_sessions': bot_manager_status.get('active_jobs', 0),
+                'max_concurrent': MAX_CONCURRENT_JOBS,
+                'queued_jobs': bot_manager_status.get('queue_length', 0),
+                'total_jobs_in_memory': len(job_status),
+                'available_bots': bot_manager_status.get('available_bots', 0),
+                'total_bots': bot_manager_status.get('total_bots', 0)
+            })
+        else:
+            # Fallback to local status if bot manager is unavailable
+            return jsonify({
+                'active_sessions': len(active_sessions),
+                'max_concurrent': MAX_CONCURRENT_JOBS,
+                'queued_jobs': len(job_queue),
+                'total_jobs_in_memory': len(job_status),
+                'error': 'Bot manager unavailable'
+            })
+    except Exception as e:
+        # Fallback to local status if bot manager is unavailable
+        return jsonify({
+            'active_sessions': len(active_sessions),
+            'max_concurrent': MAX_CONCURRENT_JOBS,
+            'queued_jobs': len(job_queue),
+            'total_jobs_in_memory': len(job_status),
+            'error': f'Bot manager connection failed: {str(e)}'
+        })
 
 @app.route('/api/health', methods=['GET'])
 def health_check():

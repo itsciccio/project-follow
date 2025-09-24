@@ -2,17 +2,18 @@
 
 ## 🚨 Critical Security Measures
 
-### ✅ **Before Using the Tool**
-- [ ] **Never share your Instagram credentials** with anyone
-- [ ] **Don't commit** `instagram_curl.txt` to Git
-- [ ] **Don't commit** the `instagram_data/` directory to Git
+### ✅ **Before Using the Bot System**
+- [ ] **Never share your bot account credentials** with anyone
+- [ ] **Don't commit** `bot_config.yaml` to Git
+- [ ] **Don't commit** the `bot_config/` directory to Git
 - [ ] **Use the `.gitignore` file** to automatically protect sensitive data
 
-### ✅ **When Getting Instagram Credentials**
-- [ ] **Use a private browser session** or incognito mode
-- [ ] **Get fresh credentials** each time (sessions expire)
-- [ ] **Don't save credentials** in browser bookmarks or notes
-- [ ] **Clear browser data** after getting credentials if needed
+### ✅ **Bot Account Security**
+- [ ] **Use dedicated bot accounts** - not your personal Instagram
+- [ ] **Keep bot credentials secure** and never share them
+- [ ] **Use strong passwords** for bot accounts
+- [ ] **Enable 2FA** on bot accounts if possible
+- [ ] **Monitor bot account activity** regularly
 
 ### ✅ **Data Handling**
 - [ ] **Keep collected data private** - it contains real usernames
@@ -20,26 +21,26 @@
 - [ ] **Respect Instagram's terms of service**
 - [ ] **Use data responsibly** for personal analysis only
 
-## 🛡️ How the Tool Protects You
+## 🛡️ How the Bot System Protects You
 
 ### **Automatic Protection**
 - **`.gitignore`** prevents sensitive files from being committed
-- **Real-time validation** ensures credentials are properly formatted
-- **Error handling** prevents partial data exposure
+- **Bot session management** handles Instagram authentication automatically
+- **No user credentials needed** - only target user IDs required
 - **Clean output** removes sensitive information from logs
 
 ### **File Security**
-- **`instagram_curl.txt`** - Contains generated curl command with your credentials
-- **`instagram_data/`** - Contains all collected user data
+- **`bot_config.yaml`** - Contains bot account credentials (automatically ignored by Git)
+- **`bot_config/`** - Contains bot session data (automatically ignored by Git)
 - **All automatically ignored** by Git
 
 ## 🔍 Security Features Built-In
 
-### **Credential Protection**
-- Instagram API credentials are never logged
-- Session cookies are kept private
-- CSRF tokens are not exposed in output
-- User IDs are anonymized in logs
+### **Bot Account Protection**
+- Bot credentials are never logged in API responses
+- Session cookies are kept private in bot manager
+- Bot accounts stay logged in automatically
+- No user session data required
 
 ### **Data Privacy**
 - Collected usernames are kept local only
@@ -49,52 +50,48 @@
 
 ## ⚠️ What to Watch Out For
 
-### **Never Do This:**
-- ❌ Commit credentials to version control
-- ❌ Share your `instagram_curl.txt` file
-- ❌ Post analysis results publicly
-- ❌ Use the tool for commercial purposes
-- ❌ Violate Instagram's rate limits
+### **Bot Account Risks**
+- **Don't use your personal Instagram** as a bot account
+- **Bot accounts may get flagged** if used excessively
+- **Rotate bot accounts** if needed
+- **Monitor for Instagram policy changes**
 
-### **Always Do This:**
-- ✅ Keep credentials private and secure
-- ✅ Use the `.gitignore` file
-- ✅ Respect Instagram's terms of service
-- ✅ Handle collected data responsibly
-- ✅ Update credentials when sessions expire
+### **API Security**
+- **Keep API server private** - don't expose to public internet
+- **Use HTTPS in production** for API endpoints
+- **Monitor API usage** for unusual activity
+- **Regularly update dependencies** for security patches
 
-## 🚀 Safe Usage Workflow
+## 🚀 Best Practices
 
-1. **Get fresh Instagram credentials** (private browser session)
-2. **Provide only 2 values**: session_id + csrf_token
-3. **Run the tool** to collect and analyze data
-4. **Review results locally** (keep private)
-5. **Delete or secure** any temporary credential files
-6. **Update credentials** when they expire (usually 24-48 hours)
+### **Bot Management**
+- **Use multiple bot accounts** for load balancing
+- **Keep bot accounts active** with regular usage
+- **Monitor bot health** through the API
+- **Have backup bot accounts** ready
 
-## 🔐 Advanced Security (Optional)
+### **Production Deployment**
+- **Use environment variables** for sensitive configuration
+- **Implement rate limiting** on API endpoints
+- **Use proper authentication** if exposing API
+- **Regular security audits** of the system
 
-### **Environment Variables**
-For extra security, you can store credentials as environment variables:
-```bash
-export INSTAGRAM_SESSION_ID="your_session_id_here"
-export INSTAGRAM_CSRF_TOKEN="your_csrf_token_here"
-```
+## 📋 Security Checklist
 
-### **Encrypted Storage**
-Consider using encrypted storage for sensitive files:
-- BitLocker (Windows)
-- FileVault (macOS)
-- LUKS (Linux)
+### **Before Deployment**
+- [ ] Bot accounts configured and tested
+- [ ] API server secured (not public)
+- [ ] Dependencies updated
+- [ ] Configuration files secured
 
-## 📞 Security Issues
+### **During Operation**
+- [ ] Monitor bot account health
+- [ ] Check API logs for errors
+- [ ] Verify data collection accuracy
+- [ ] Monitor for unusual activity
 
-If you discover a security vulnerability:
-1. **Don't post it publicly**
-2. **Contact the maintainer privately**
-3. **Provide detailed reproduction steps**
-4. **Wait for a fix before using the tool**
-
-## 🎯 Remember
-
-**This tool is designed for personal use and educational purposes. Always prioritize privacy and security when handling Instagram data.** 
+### **Regular Maintenance**
+- [ ] Update bot account passwords
+- [ ] Rotate bot accounts if needed
+- [ ] Review and clean old data
+- [ ] Update system dependencies

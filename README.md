@@ -64,7 +64,7 @@ curl -X POST http://localhost:5000/api/analyze-not-following-back \
 - **Session information** and cookies are kept private
 
 ### **What's Protected (Never Committed):**
-- `instagram_curl.txt` - Generated curl command with your credentials
+- `bot_config.yaml` - Bot account configuration
 - `instagram_data/` - All collected follower/following data
 - Any files containing API keys, tokens, or personal data
 
@@ -91,7 +91,7 @@ The tool only asks you for **2 values** and automatically extracts the rest:
 2. **Open Developer Tools** (F12) → Application tab
 3. **Go to Cookies** → instagram.com
 4. **Look for these two cookies:**
-   - `csrf_token` - Your CSRF token
+   - `target_user_id` - Instagram user ID to analyze
    - `sessionid` - Your session ID (contains your user ID)
 
 ## 🖥️ API Server Features
@@ -144,15 +144,13 @@ pip install -r requirements.txt
 
 ## 📖 Usage Examples
 
-### **Command-Line Tool:**
+### **Bot System:**
 ```bash
-# Complete automated workflow (recommended)
-python run_instagram_analysis.py
+# Start bot manager (handles Instagram sessions)
+python instagram_bot_manager.py
 
-# Manual step-by-step
-python get_instagram_credentials.py
-python instagram_api_scraper.py --curl-file instagram_curl.txt
-python compare_followers.py
+# Start API server (handles user requests)
+python instagram_api_server.py
 ```
 
 ### **API Server:**
@@ -163,7 +161,7 @@ python instagram_api_server.py
 # Submit job
 curl -X POST http://localhost:5000/api/analyze \
   -H "Content-Type: application/json" \
-  -d '{"csrf_token": "your_token", "session_id": "your_session"}'
+  -d '{"target_user_id": "123456789"}'
 
 # Check status
 curl http://localhost:5000/api/status/your-job-id

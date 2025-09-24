@@ -2,22 +2,24 @@
 
 ## Overview
 
-The Instagram bot manager now uses a YAML configuration file to manage bot accounts. This provides better security, easier management, and more flexibility than hardcoded credentials.
+The Instagram bot manager uses a YAML configuration file to manage bot accounts. This provides better security, easier management, and more flexibility than hardcoded credentials.
 
 ## Quick Start
 
 ### 1. Create Configuration File
 
 ```bash
-python3 setup_bot_manager.py
-# Choose option 1 to create bot configuration
+# Copy the example configuration
+cp bot_config.yaml.example bot_config.yaml
+
+# Edit the configuration file with your bot credentials
+nano bot_config.yaml  # or use your preferred editor
 ```
 
 ### 2. Start Bot Manager
 
 ```bash
-python3 setup_bot_manager.py
-# Choose option 3 to start the bot manager
+python3 instagram_bot_manager.py
 ```
 
 ### 3. Start Main API Server
@@ -51,155 +53,159 @@ manager:
 logging:
   level: "INFO"
   file: "bot_manager.log"
+```
 
-# Security settings
-security:
-  cookie_encryption: true
-  session_rotation: true
+## Bot Account Configuration
+
+### **Required Fields**
+- `id`: Unique identifier for the bot
+- `username`: Instagram username
+- `password`: Instagram password
+- `description`: Human-readable description
+- `enabled`: Whether the bot is active
+
+### **Example Configuration**
+```yaml
+bots:
+  - id: "bot_1"
+    username: "my_bot_account_1"
+    password: "secure_password_123"
+    description: "Primary bot account"
+    enabled: true
+  - id: "bot_2"
+    username: "my_bot_account_2"
+    password: "secure_password_456"
+    description: "Secondary bot account"
+    enabled: true
+```
+
+## Manager Settings
+
+### **Port Configuration**
+```yaml
+manager:
+  port: 5001  # Bot manager API port
+```
+
+### **Health Monitoring**
+```yaml
+manager:
+  health_check_interval: 1800  # Check every 30 minutes
+  session_timeout: 86400        # 24 hour session timeout
+```
+
+### **Concurrency Settings**
+```yaml
+manager:
+  max_concurrent_bots: 10  # Maximum concurrent bot sessions
+```
+
+### **Browser Settings**
+```yaml
+manager:
+  headless: true  # Run Chrome in headless mode (recommended)
+```
+
+## Logging Configuration
+
+### **Log Levels**
+- `DEBUG`: Detailed debugging information
+- `INFO`: General information (recommended)
+- `WARNING`: Warning messages only
+- `ERROR`: Error messages only
+
+### **Log Output**
+```yaml
+logging:
+  level: "INFO"
+  file: "bot_manager.log"  # Log to file
+  console: true            # Also log to console
 ```
 
 ## Security Best Practices
 
-### 🔒 **Never Commit Credentials**
-- `bot_config.yaml` is in `.gitignore`
-- Never commit this file to version control
-- Use `bot_config.yaml.example` as a template
+### **Configuration Security**
+- Never commit `bot_config.yaml` to Git
+- Use strong passwords for bot accounts
+- Keep configuration files secure
+- Use environment variables for sensitive data
 
-### 🤖 **Bot Account Security**
-- Use dedicated Instagram accounts (not your main account)
-- Accounts should have no followers or very few
-- Use strong, unique passwords
-- Enable 2FA if possible
-- Monitor accounts for restrictions
+### **Bot Account Security**
+- Use dedicated Instagram accounts (not personal)
+- Enable 2FA on bot accounts if possible
+- Monitor bot account activity regularly
+- Rotate bot accounts if needed
 
-### 🛡️ **File Security**
-- Restrict file permissions: `chmod 600 bot_config.yaml`
-- Keep the file in a secure location
-- Consider using environment variables for production
+## Advanced Configuration
 
-## Configuration Options
+### **Multiple Bot Managers**
+```yaml
+# Primary bot manager
+manager:
+  port: 5001
+  bots: [...]
 
-### Bot Configuration
-- **id**: Unique identifier for the bot
-- **username**: Instagram username
-- **password**: Instagram password
-- **description**: Human-readable description
-- **enabled**: Whether the bot is active (true/false)
+# Secondary bot manager
+manager:
+  port: 5002
+  bots: [...]
+```
 
-### Manager Configuration
-- **port**: HTTP API port (default: 5001)
-- **health_check_interval**: Health check frequency in seconds (default: 1800)
-- **session_timeout**: Session timeout in seconds (default: 86400)
-- **max_concurrent_bots**: Maximum concurrent bot usage (default: 10)
-- **headless**: Run browsers in headless mode (default: true)
-
-### Logging Configuration
-- **level**: Log level (DEBUG, INFO, WARNING, ERROR)
-- **file**: Log file path
-- **max_size**: Maximum log file size
-- **backup_count**: Number of backup log files
-
-### Security Configuration
-- **cookie_encryption**: Encrypt stored cookies (default: true)
-- **session_rotation**: Rotate sessions periodically (default: true)
-- **rotation_interval**: Session rotation interval in seconds (default: 3600)
-
-## Environment Variables (Production)
-
-For production deployments, consider using environment variables:
-
-```bash
-# Set environment variables
-export BOT_USERNAME_1="your_bot_username"
-export BOT_PASSWORD_1="your_bot_password"
-export BOT_USERNAME_2="your_bot_username_2"
-export BOT_PASSWORD_2="your_bot_password_2"
-
-# Update bot_config.yaml to use environment variables
-bots:
-  - id: "bot_1"
-    username: "${BOT_USERNAME_1}"
-    password: "${BOT_PASSWORD_1}"
-    enabled: true
+### **Custom Chrome Options**
+```yaml
+manager:
+  chrome_options:
+    - "--no-sandbox"
+    - "--disable-dev-shm-usage"
+    - "--disable-gpu"
 ```
 
 ## Troubleshooting
 
-### Configuration File Issues
-- **File not found**: Run `python3 setup_bot_manager.py` to create configuration
-- **Invalid YAML**: Check syntax with a YAML validator
-- **Missing fields**: Ensure all required fields are present
+### **Configuration Issues**
+- **Invalid YAML**: Check syntax with YAML validator
+- **Missing credentials**: Ensure all required fields are present
+- **Port conflicts**: Change port if 5001 is already in use
 
-### Bot Login Issues
-- **Invalid credentials**: Verify username/password
-- **Account locked**: Check Instagram account status
-- **2FA enabled**: Disable 2FA or use app-specific password
+### **Bot Account Issues**
+- **Login failures**: Check credentials and account status
+- **Session expired**: Bot manager will automatically refresh
+- **Rate limiting**: Use multiple bot accounts for load balancing
 
-### Manager Issues
-- **Port in use**: Change port in configuration
-- **No bots available**: Check bot status and credentials
-- **Session expired**: Bots auto-refresh, check logs
-
-## Monitoring
-
-### Check Bot Status
+### **Health Monitoring**
 ```bash
+# Check bot manager status
+curl http://localhost:5001/api/bot/health
+
+# Get detailed bot status
 curl http://localhost:5001/api/bot/status
 ```
 
-### Check Manager Health
+## Production Deployment
+
+### **Environment Variables**
 ```bash
-curl http://localhost:5001/api/bot/health
+export BOT_CONFIG_PATH="/path/to/bot_config.yaml"
+export BOT_MANAGER_PORT="5001"
+export BOT_HEADLESS="true"
 ```
 
-### View Logs
-```bash
-tail -f bot_manager.log
-```
-
-## Migration from Old System
-
-If you were using the old hardcoded system:
-
-1. **Backup old configuration**: Save any hardcoded credentials
-2. **Create new config**: Run `python3 setup_bot_manager.py`
-3. **Test configuration**: Verify bots can login
-4. **Update deployment**: Use new configuration system
-
-## Example Production Setup
-
+### **Docker Configuration**
 ```yaml
-# Production bot_config.yaml
-bots:
-  - id: "primary_bot"
-    username: "${BOT_USERNAME_1}"
-    password: "${BOT_PASSWORD_1}"
-    description: "Primary production bot"
-    enabled: true
-    
-  - id: "backup_bot"
-    username: "${BOT_USERNAME_2}"
-    password: "${BOT_PASSWORD_2}"
-    description: "Backup production bot"
-    enabled: true
-
-manager:
-  port: 5001
-  health_check_interval: 900  # 15 minutes
-  session_timeout: 43200      # 12 hours
-  max_concurrent_bots: 5
-  headless: true
-
-logging:
-  level: "WARNING"
-  file: "/var/log/instagram_bot_manager.log"
-  max_size: "50MB"
-  backup_count: 10
-
-security:
-  cookie_encryption: true
-  session_rotation: true
-  rotation_interval: 1800  # 30 minutes
+version: '3.8'
+services:
+  bot-manager:
+    build: .
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./bot_config.yaml:/app/bot_config.yaml
+    environment:
+      - BOT_HEADLESS=true
 ```
 
-This configuration system provides a secure, flexible, and maintainable way to manage your Instagram bot accounts.
+### **Monitoring**
+- Set up health checks for bot manager
+- Monitor bot account status
+- Track API usage and performance
+- Implement proper logging and alerting
