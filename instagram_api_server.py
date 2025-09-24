@@ -11,7 +11,7 @@ Usage:
 
 Endpoints:
     POST /api/analyze - Submit new analysis job (requires only target_user_id)
-    POST /api/analyze-unfollowers - Submit new un-followers analysis job
+    POST /api/analyze-not-following-back - Submit new not-following-back analysis job
     GET /api/status/<job_id> - Get job status
     GET /api/queue - Get queue status
     GET /api/health - Health check
@@ -53,147 +53,74 @@ def generate_job_id():
     """Generate a random UUID for the job ID"""
     return str(uuid.uuid4())
 
-class InstagramBotAnalyzerAPI:
-    """Controller class for Instagram follower analysis using bot slaves"""
-    
-    def __init__(self, target_user_id: str, bot_data: dict):
-        """
-        Initialize with bot session data
-        
-        Args:
-            target_user_id: Instagram user ID to analyze
-            bot_data: Bot session data from slave manager
-        """
-        self.target_user_id = target_user_id
-        self.bot_data = bot_data
-        self.scraper = None
-        self._setup_scraper()
-    
-    def _setup_scraper(self):
-        """Setup Instagram scraper with bot session data."""
-        try:
-            # Create scraper with bot session data
-            self.scraper = InstagramAPIScraper(
-                user_id=self.bot_data['user_id'],  # Bot's user ID
-                csrf_token=self.bot_data['csrf_token'],
-                x_ig_www_claim='',  # Can be extracted from session if needed
-                x_web_session_id='',  # Can be extracted from session if needed
-                cookies=f"sessionid={self.bot_data['session_id']}; csrftoken={self.bot_data['csrf_token']}"
-            )
-            
-            # Override the user_id for the target user (not the bot)
-            self.scraper.user_id = self.target_user_id
-            
-            logger.info(f"Scraper setup complete for target user {self.target_user_id} using bot {self.bot_data['bot_id']}")
-            
-        except Exception as e:
-            logger.error(f"Failed to setup scraper: {e}")
-            raise
-    
-    def analyze(self, job_id: str) -> dict:
-        """
-        Run the Instagram follower analysis using bot account
-        
-        Args:
-            job_id: Unique identifier for this analysis job
-            
-        Returns:
-            dict: Analysis results with counts and unfollowers list
-        """
-        try:
-            logger.info(f"[{job_id}] Starting Instagram follower analysis for user {self.target_user_id}")
-            
-            # Fetch data using bot account
-            followers = self._fetch_followers(job_id)
-            following = self._fetch_following(job_id)
-            
-            # Business logic: find unfollowers
-            unfollowers = self._find_unfollowers(followers, following)
-            
-            # Format result
-            result = self._format_analysis_result(followers, following, unfollowers)
-            
-            logger.info(f"[{job_id}] Analysis completed: {len(unfollowers)} unfollowers found")
-            return result
-            
-        except Exception as e:
-            logger.error(f"[{job_id}] Analysis failed: {str(e)}")
-            raise e
-    
-    def _fetch_followers(self, job_id: str) -> list:
-        """Fetch followers using bot account"""
-        logger.info(f"[{job_id}] Fetching followers for user {self.target_user_id}")
-        return self.scraper.get_followers()
-    
-    def _fetch_following(self, job_id: str) -> list:
-        """Fetch following using bot account"""
-        logger.info(f"[{job_id}] Fetching following for user {self.target_user_id}")
-        return self.scraper.get_following()
-    
-    def _find_unfollowers(self, followers: list, following: list) -> list:
-        """Find users who don't follow back"""
-        follower_usernames = self.scraper.extract_usernames(followers)
-        following_usernames = self.scraper.extract_usernames(following)
-        
-        follower_set = set(follower_usernames)
-        following_set = set(following_usernames)
-        unfollowers = list(following_set - follower_set)
-        
-        return unfollowers
-    
-    def _format_analysis_result(self, followers: list, following: list, unfollowers: list) -> dict:
-        """Format analysis results"""
-        return {
-            'target_user_id': self.target_user_id,
-            'followers_count': len(followers),
-            'following_count': len(following),
-            'unfollowers_count': len(unfollowers),
-            'unfollowers': unfollowers,
-            'analysis_completed_at': datetime.now().isoformat(),
-            'bot_account_used': self.bot_data['bot_id']
-        }
+# Removed unused InstagramBotAnalyzerAPI class - all analysis is delegated to bot manager
 
-def request_bot_session() -> dict:
+def submit_job_to_bot_manager(job_data: dict) -> dict:
     """
-    Request a bot session from the slave manager.
+    Submit a job to the bot manager queue system.
     
+    Args:
+        job_data: Dictionary containing job information
+        
     Returns:
-        dict: Bot session data or None if no bots available
+        dict: Job submission result with job_id and queue position
     """
     try:
-        response = requests.post(f"{BOT_SLAVE_MANAGER_URL}/api/bot/request", timeout=10)
+        response = requests.post(f"{BOT_SLAVE_MANAGER_URL}/api/job/submit", 
+                               json=job_data, timeout=10)
         
         if response.status_code == 200:
-            data = response.json()
-            if data.get('success'):
-                return data.get('bot_data')
-            else:
-                logger.error(f"No available bots: {data.get('error')}")
-                return None
+            return response.json()
         else:
-            logger.error(f"Failed to request bot session: {response.status_code}")
+            logger.error(f"Failed to submit job: {response.status_code}")
             return None
             
     except requests.exceptions.RequestException as e:
-        logger.error(f"Error requesting bot session: {e}")
+        logger.error(f"Error submitting job: {e}")
         return None
 
-def release_bot_session(bot_id: str):
-    """Release a bot session back to the slave manager."""
+def get_job_status_from_bot_manager(job_id: str) -> dict:
+    """
+    Get job status from the bot manager.
+    
+    Args:
+        job_id: Job identifier
+        
+    Returns:
+        dict: Job status information
+    """
     try:
-        response = requests.post(
-            f"{BOT_SLAVE_MANAGER_URL}/api/bot/release",
-            json={'bot_id': bot_id},
-            timeout=10
-        )
+        response = requests.get(f"{BOT_SLAVE_MANAGER_URL}/api/job/status/{job_id}", timeout=10)
         
         if response.status_code == 200:
-            logger.info(f"Bot {bot_id} released successfully")
+            return response.json()
         else:
-            logger.error(f"Failed to release bot {bot_id}: {response.status_code}")
+            logger.error(f"Failed to get job status: {response.status_code}")
+            return None
             
     except requests.exceptions.RequestException as e:
-        logger.error(f"Error releasing bot {bot_id}: {e}")
+        logger.error(f"Error getting job status: {e}")
+        return None
+
+def complete_job_in_bot_manager(job_id: str):
+    """
+    Mark a job as completed in the bot manager.
+    
+    Args:
+        job_id: Job identifier
+    """
+    try:
+        response = requests.post(f"{BOT_SLAVE_MANAGER_URL}/api/job/complete", 
+                               json={'job_id': job_id}, timeout=10)
+        
+        if response.status_code != 200:
+            logger.error(f"Failed to complete job: {response.status_code}")
+            
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error completing job: {e}")
+
+# Bot session management is now handled entirely by the bot manager
+# The API server only submits jobs and receives results
 
 def process_job(job_data: dict) -> None:
     """
@@ -214,24 +141,35 @@ def process_job(job_data: dict) -> None:
         job_status[job_id]['status'] = 'processing'
         job_status[job_id]['started_at'] = time.time()
         
-        # Request bot session
-        logger.info(f"[{job_id}] Requesting bot session...")
-        bot_data = request_bot_session()
+        # Job is already submitted to bot manager queue
+        # The bot manager will handle bot assignment and processing internally
+        logger.info(f"[{job_id}] Job submitted to bot manager queue")
         
-        if not bot_data:
-            raise ValueError("No available bot sessions")
+        # Wait for job to be processed by bot manager
+        logger.info(f"[{job_id}] Waiting for bot manager to process job...")
         
-        logger.info(f"[{job_id}] Using bot {bot_data['bot_id']} for analysis")
+        # Poll bot manager for job completion
+        max_wait_time = 300  # 5 minutes max wait
+        wait_start = time.time()
         
-        # Create analyzer with bot session
-        analyzer = InstagramBotAnalyzerAPI(target_user_id, bot_data)
-        
-        # Run analysis based on job type
-        if job_type == 'analyze_unfollowers':
-            # For unfollowers analysis, we need to implement this
-            result = analyzer.analyze(job_id)  # Simplified for now
-        else:  # Default to regular analyze
-            result = analyzer.analyze(job_id)
+        while time.time() - wait_start < max_wait_time:
+            # Check job status in bot manager
+            bot_status = get_job_status_from_bot_manager(job_id)
+            logger.info(f"[{job_id}] Bot manager status: {bot_status}")
+            
+            if bot_status and bot_status.get('status') in ['completed', 'failed']:
+                if bot_status.get('status') == 'completed':
+                    result = bot_status.get('result', {})
+                    logger.info(f"[{job_id}] Job completed by bot manager")
+                else:
+                    error_msg = bot_status.get('error', 'Unknown error')
+                    logger.error(f"[{job_id}] Job failed in bot manager: {error_msg}")
+                    raise ValueError(f"Bot manager error: {error_msg}")
+                break
+            
+            time.sleep(2)  # Wait 2 seconds before checking again
+        else:
+            raise ValueError("Job did not complete within timeout period")
         
         # Update with results
         job_status[job_id].update({
@@ -261,9 +199,8 @@ def process_job(job_data: dict) -> None:
         })
     
     finally:
-        # Release bot session
-        if bot_data:
-            release_bot_session(bot_data['bot_id'])
+        # Mark job as completed in bot manager
+        complete_job_in_bot_manager(job_id)
         
         # Remove from active sessions
         active_sessions.discard(target_user_id)
@@ -331,10 +268,19 @@ def analyze_followers():
             return jsonify({'error': 'target_user_id is required'}), 400
         
         target_user_id = data['target_user_id']
+        previous_followers = data.get('previous_followers', None)  # Optional
         
         # Validate target_user_id is numeric
         if not target_user_id.isdigit():
             return jsonify({'error': 'target_user_id must be numeric'}), 400
+        
+        # Validate previous_followers if provided
+        if previous_followers is not None:
+            if not isinstance(previous_followers, list):
+                return jsonify({'error': 'previous_followers must be a list'}), 400
+            
+            if len(previous_followers) == 0:
+                return jsonify({'error': 'previous_followers cannot be empty'}), 400
         
         # Check if there's already an active job for this user
         existing_job_id = find_active_job_for_user(target_user_id)
@@ -354,41 +300,45 @@ def analyze_followers():
         job_data = {
             'job_id': job_id,
             'target_user_id': target_user_id,
+            'job_type': 'analyze',
             'created_at': time.time()
         }
         
-        # Initialize status
+        # Add optional previous_followers if provided
+        if previous_followers is not None:
+            job_data['previous_followers'] = previous_followers
+        
+        # Submit job to bot manager queue
+        bot_manager_result = submit_job_to_bot_manager(job_data)
+        if not bot_manager_result:
+            return jsonify({'error': 'Failed to submit job to bot manager'}), 500
+        
+        # Initialize status in API server
         job_status[job_id] = {
             'status': 'queued',
             'target_user_id': target_user_id,
+            'job_type': 'analyze',
             'created_at': time.time(),
-            'position_in_queue': len(job_queue) + 1
+            'position_in_queue': bot_manager_result.get('position_in_queue', 1)
         }
         
-        # Add to queue or start immediately
-        if len(active_sessions) < MAX_CONCURRENT_JOBS:
-            # Start immediately
-            active_sessions.add(target_user_id)
-            executor.submit(process_job, job_data)
-            job_status[job_id]['status'] = 'processing'
-            job_status[job_id]['position_in_queue'] = 0
-        else:
-            # Add to queue
-            job_queue.append(job_data)
+        # Add to local queue and process next job if capacity available
+        job_queue.append(job_data)
+        process_next_queued_job()
         
         return jsonify({
             'job_id': job_id,
-            'status': job_status[job_id]['status'],
-            'position_in_queue': job_status[job_id]['position_in_queue'],
-            'estimated_wait_time': estimate_wait_time(len(job_queue))
+            'status': 'queued',
+            'position_in_queue': bot_manager_result.get('position_in_queue', 1),
+            'estimated_wait_time': bot_manager_result.get('estimated_wait_time', 0)
         })
         
     except Exception as e:
         return jsonify({'error': f'Internal server error: {str(e)}'}), 500
 
-@app.route('/api/analyze-unfollowers', methods=['POST'])
-def analyze_unfollowers():
-    """Submit a new Instagram un-followers analysis job using bot slaves"""
+@app.route('/api/analyze-not-following-back', methods=['POST'])
+def analyze_not_following_back():
+    """Submit a new Instagram not-following-back analysis job using bot slaves"""
     try:
         data = request.json
         
@@ -399,19 +349,7 @@ def analyze_unfollowers():
         if 'target_user_id' not in data:
             return jsonify({'error': 'target_user_id is required'}), 400
         
-        if 'previous_followers' not in data:
-            return jsonify({'error': 'previous_followers is required'}), 400
-        
         target_user_id = data['target_user_id']
-        previous_followers = data['previous_followers']
-        
-        # Validate previous_followers is a list
-        if not isinstance(previous_followers, list):
-            return jsonify({'error': 'previous_followers must be a list'}), 400
-        
-        # Validate previous_followers is not empty
-        if len(previous_followers) == 0:
-            return jsonify({'error': 'previous_followers cannot be empty'}), 400
         
         # Validate target_user_id is numeric
         if not target_user_id.isdigit():
@@ -435,36 +373,33 @@ def analyze_unfollowers():
         job_data = {
             'job_id': job_id,
             'target_user_id': target_user_id,
-            'job_type': 'analyze_unfollowers',
-            'previous_followers': previous_followers,
+            'job_type': 'analyze_not_following_back',
             'created_at': time.time()
         }
         
-        # Initialize status
+        # Submit job to bot manager queue
+        bot_manager_result = submit_job_to_bot_manager(job_data)
+        if not bot_manager_result:
+            return jsonify({'error': 'Failed to submit job to bot manager'}), 500
+        
+        # Initialize status in API server
         job_status[job_id] = {
             'status': 'queued',
             'target_user_id': target_user_id,
-            'job_type': 'analyze_unfollowers',
+            'job_type': 'analyze_not_following_back',
             'created_at': time.time(),
-            'position_in_queue': len(job_queue) + 1
+            'position_in_queue': bot_manager_result.get('position_in_queue', 1)
         }
         
-        # Add to queue or start immediately
-        if len(active_sessions) < MAX_CONCURRENT_JOBS:
-            # Start immediately
-            active_sessions.add(target_user_id)
-            executor.submit(process_job, job_data)
-            job_status[job_id]['status'] = 'processing'
-            job_status[job_id]['position_in_queue'] = 0
-        else:
-            # Add to queue
-            job_queue.append(job_data)
+        # Add to local queue and process next job if capacity available
+        job_queue.append(job_data)
+        process_next_queued_job()
         
         return jsonify({
             'job_id': job_id,
-            'status': job_status[job_id]['status'],
-            'position_in_queue': job_status[job_id]['position_in_queue'],
-            'estimated_wait_time': estimate_wait_time(len(job_queue))
+            'status': 'queued',
+            'position_in_queue': bot_manager_result.get('position_in_queue', 1),
+            'estimated_wait_time': bot_manager_result.get('estimated_wait_time', 0)
         })
         
     except Exception as e:
@@ -546,8 +481,8 @@ if __name__ == '__main__':
     print(f"Bot slave manager URL: {BOT_SLAVE_MANAGER_URL}")
     print("=" * 60)
     print("Available endpoints:")
-    print("  POST /api/analyze - Submit new analysis job (requires only target_user_id)")
-    print("  POST /api/analyze-unfollowers - Submit new un-followers analysis job")
+    print("  POST /api/analyze - Submit new follower analysis job")
+    print("  POST /api/analyze-not-following-back - Submit new not-following-back analysis job")
     print("  GET  /api/status/<job_id> - Get job status")
     print("  GET  /api/queue - Get queue status")
     print("  GET  /api/health - Health check")

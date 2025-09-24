@@ -17,9 +17,14 @@ import time
 import logging
 import threading
 import yaml
+import uuid
 from datetime import datetime, timedelta
 from typing import Dict, Optional, List
 from pathlib import Path
+
+# Suppress Chrome logs at environment level
+os.environ['WDM_LOG_LEVEL'] = '0'  # Suppress webdriver-manager logs
+os.environ['WDM_PRINT_FIRST_LINE'] = 'False'
 from flask import Flask, request, jsonify
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -30,9 +35,29 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 from webdriver_manager.chrome import ChromeDriverManager
 
+# Import Instagram scraper for actual analysis
+from instagram_api_scraper import InstagramAPIScraper
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Suppress unwanted logs
+logging.getLogger('selenium').setLevel(logging.WARNING)
+logging.getLogger('urllib3').setLevel(logging.WARNING)
+logging.getLogger('webdriver_manager').setLevel(logging.WARNING)
+logging.getLogger('requests').setLevel(logging.WARNING)
+logging.getLogger('urllib3.connectionpool').setLevel(logging.WARNING)
+
+# Suppress Chrome/Chromium logs
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+warnings.filterwarnings("ignore", category=UserWarning)
+
+# Suppress specific selenium warnings
+logging.getLogger('selenium.webdriver.remote.remote_connection').setLevel(logging.WARNING)
+logging.getLogger('selenium.webdriver.common.service').setLevel(logging.WARNING)
+logging.getLogger('selenium.webdriver.chrome.service').setLevel(logging.WARNING)
 
 class InstagramBotSlave:
     """
@@ -60,6 +85,7 @@ class InstagramBotSlave:
         self.is_logged_in = False
         self.last_activity = None
         self.is_busy = False
+        self.scraper = None  # Persistent Instagram scraper instance
         
         # Initialize browser
         self._setup_browser()
@@ -98,6 +124,39 @@ class InstagramBotSlave:
             chrome_options.add_argument("--disable-dev-shm-usage")
             chrome_options.add_argument("--disable-gpu")
             chrome_options.add_argument("--disable-extensions")
+            
+            # Suppress browser logs and reduce noise
+            chrome_options.add_argument("--log-level=3")  # Only show fatal errors
+            chrome_options.add_argument("--silent")
+            chrome_options.add_argument("--disable-logging")
+            chrome_options.add_argument("--disable-web-security")
+            chrome_options.add_argument("--disable-features=VizDisplayCompositor")
+            chrome_options.add_argument("--disable-background-timer-throttling")
+            chrome_options.add_argument("--disable-backgrounding-occluded-windows")
+            chrome_options.add_argument("--disable-renderer-backgrounding")
+            chrome_options.add_argument("--disable-ipc-flooding-protection")
+            chrome_options.add_argument("--disable-hang-monitor")
+            chrome_options.add_argument("--disable-prompt-on-repost")
+            chrome_options.add_argument("--disable-domain-reliability")
+            chrome_options.add_argument("--disable-component-extensions-with-background-pages")
+            chrome_options.add_argument("--disable-default-apps")
+            chrome_options.add_argument("--disable-sync")
+            chrome_options.add_argument("--disable-translate")
+            chrome_options.add_argument("--disable-background-networking")
+            chrome_options.add_argument("--disable-client-side-phishing-detection")
+            chrome_options.add_argument("--disable-component-update")
+            chrome_options.add_argument("--disable-features=TranslateUI")
+            chrome_options.add_argument("--disable-print-preview")
+            chrome_options.add_argument("--disable-speech-api")
+            chrome_options.add_argument("--hide-scrollbars")
+            chrome_options.add_argument("--mute-audio")
+            chrome_options.add_argument("--no-first-run")
+            chrome_options.add_argument("--no-default-browser-check")
+            chrome_options.add_argument("--no-pings")
+            chrome_options.add_argument("--no-zygote")
+            chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+            chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+            chrome_options.add_argument("--enable-unsafe-swiftshader")
             
             # Anti-detection options
             chrome_options.add_argument("--disable-blink-features=AutomationControlled")
@@ -163,14 +222,16 @@ class InstagramBotSlave:
     def login(self) -> bool:
         """Login to Instagram."""
         try:
-            logger.info(f"Bot {self.bot_id}: Attempting login...")
-            
+            logger.info(f"Bot {self.bot_id}: Navigating to Instagram main page...")
             # Navigate to Instagram main page first to handle cookie consent
             self.driver.get("https://www.instagram.com/")
             time.sleep(3)
-            
+
+            logger.info(f"Bot {self.bot_id}: Handling cookie consent...")
             # Handle cookie consent dialog if present
             self._handle_cookie_consent()
+
+            logger.info(f"Bot {self.bot_id}: Attempting login...")
             
             # Now navigate to login page
             self.driver.get("https://www.instagram.com/accounts/login/")
@@ -193,7 +254,7 @@ class InstagramBotSlave:
             login_button.click()
             
             # Wait for login to complete
-            time.sleep(5)
+            time.sleep(10)
             
             try:
                 # Extract session data
@@ -222,6 +283,9 @@ class InstagramBotSlave:
                 
                 # Save session data
                 self._save_session_data()
+                
+                # Invalidate scraper since session data changed
+                self.invalidate_scraper()
                 
                 logger.info(f"Bot {self.bot_id}: Login successful")
                 return True
@@ -259,6 +323,9 @@ class InstagramBotSlave:
                 
                 self._save_session_data()
                 
+                # Invalidate scraper since session data changed
+                self.invalidate_scraper()
+                
                 logger.info(f"Bot {self.bot_id}: Session refreshed successfully")
                 return True
             else:
@@ -281,6 +348,44 @@ class InstagramBotSlave:
             'user_id': self.session_data['user_id'],
             'last_login': self.session_data['last_login']
         }
+    
+    def get_scraper(self, target_user_id: str) -> InstagramAPIScraper:
+        """
+        Get or create persistent Instagram scraper for this bot.
+        
+        Args:
+            target_user_id: Instagram user ID to analyze
+            
+        Returns:
+            InstagramAPIScraper: Configured scraper instance
+        """
+        # Check if we need to create or update scraper
+        if not self.scraper or not self.is_logged_in:
+            bot_data = self.get_session_data()
+            if not bot_data:
+                raise ValueError("Bot session data not available")
+            
+            # Create new scraper with current session data
+            self.scraper = InstagramAPIScraper(
+                user_id=bot_data['user_id'],  # Bot's user ID
+                csrf_token=bot_data['csrf_token'],
+                x_ig_www_claim='',  # Can be extracted from session if needed
+                x_web_session_id='',  # Can be extracted from session if needed
+                cookies=f"sessionid={bot_data['session_id']}; csrftoken={bot_data['csrf_token']}"
+            )
+            
+            logger.info(f"Bot {self.bot_id}: Created new Instagram scraper")
+        
+        # Update target user for this analysis
+        self.scraper.user_id = target_user_id
+        
+        return self.scraper
+    
+    def invalidate_scraper(self):
+        """Invalidate the scraper when session data changes."""
+        if self.scraper:
+            self.scraper = None
+            logger.info(f"Bot {self.bot_id}: Scraper invalidated due to session change")
     
     def is_healthy(self) -> bool:
         """Check if bot is healthy."""
@@ -387,6 +492,11 @@ class InstagramBotSlave:
         """Cleanup resources."""
         if self.driver:
             self.driver.quit()
+        
+        # Cleanup scraper if it exists
+        if self.scraper:
+            self.scraper = None
+            
         logger.info(f"Bot {self.bot_id}: Cleaned up")
 
 
@@ -394,6 +504,7 @@ class InstagramBotSlaveManager:
     """
     Manager for multiple Instagram bot slaves.
     Provides HTTP API for the main server to request bot sessions.
+    Now includes job queue management for better resource utilization.
     """
     
     def __init__(self, config_file: str = "bot_config.yaml", config_dir: str = "bot_config"):
@@ -419,12 +530,25 @@ class InstagramBotSlaveManager:
         self.monitoring_thread = None
         self.is_monitoring = False
         
+        # Job queue management
+        self.job_queue = []  # Queue of pending jobs waiting for bots
+        self.active_jobs = {}  # Currently running jobs {job_id: bot_id}
+        self.completed_jobs = {}  # Recently completed jobs {job_id: job_data}
+        self.job_processing_thread = None
+        self.is_processing_jobs = False
+        
         # Flask app for HTTP API
         self.app = Flask(__name__)
         self._setup_routes()
         
         # Load and initialize bot slaves from configuration
         self._initialize_bot_slaves()
+        
+        # Start job processing
+        self._start_job_processing()
+        
+        # Start cleanup thread for old completed jobs
+        self._start_cleanup_thread()
     
     def _load_config(self) -> dict:
         """Load configuration from YAML file."""
@@ -561,6 +685,334 @@ class InstagramBotSlaveManager:
         
         return None
     
+    def submit_job(self, job_data: dict) -> dict:
+        """
+        Submit a job to the queue system.
+        
+        Args:
+            job_data: Dictionary containing job information
+            
+        Returns:
+            Dict with job_id and queue position
+        """
+        job_id = job_data.get('job_id', str(uuid.uuid4()))
+        job_data['job_id'] = job_id
+        job_data['submitted_at'] = datetime.now().isoformat()
+        job_data['status'] = 'queued'
+        
+        # Add to queue
+        self.job_queue.append(job_data)
+        
+        logger.info(f"Job {job_id} submitted to queue (position: {len(self.job_queue)})")
+        
+        return {
+            'job_id': job_id,
+            'status': 'queued',
+            'position_in_queue': len(self.job_queue),
+            'estimated_wait_time': self._estimate_wait_time()
+        }
+    
+    def _start_job_processing(self):
+        """Start the job processing thread."""
+        if self.is_processing_jobs:
+            return
+        
+        self.is_processing_jobs = True
+        self.job_processing_thread = threading.Thread(
+            target=self._process_job_queue,
+            daemon=True
+        )
+        self.job_processing_thread.start()
+        logger.info("Started job processing thread")
+    
+    def _start_cleanup_thread(self):
+        """Start the cleanup thread for old completed jobs."""
+        cleanup_thread = threading.Thread(
+            target=self._cleanup_old_jobs,
+            daemon=True
+        )
+        cleanup_thread.start()
+        logger.info("Started job cleanup thread")
+    
+    def _cleanup_old_jobs(self):
+        """Clean up old completed jobs to prevent memory buildup."""
+        while True:
+            try:
+                # Clean up jobs older than 1 hour
+                cutoff_time = datetime.now() - timedelta(hours=1)
+                jobs_to_remove = []
+                
+                for job_id, job_data in self.completed_jobs.items():
+                    completed_at = job_data.get('completed_at')
+                    if completed_at:
+                        try:
+                            job_time = datetime.fromisoformat(completed_at)
+                            if job_time < cutoff_time:
+                                jobs_to_remove.append(job_id)
+                        except:
+                            # If we can't parse the date, remove it
+                            jobs_to_remove.append(job_id)
+                
+                # Remove old jobs
+                for job_id in jobs_to_remove:
+                    del self.completed_jobs[job_id]
+                
+                if jobs_to_remove:
+                    logger.info(f"Cleaned up {len(jobs_to_remove)} old completed jobs")
+                
+                # Sleep for 30 minutes before next cleanup
+                time.sleep(1800)
+                
+            except Exception as e:
+                logger.error(f"Error in job cleanup: {e}")
+                time.sleep(300)  # Wait 5 minutes before retrying
+    
+    def _process_job_queue(self):
+        """Process jobs from the queue when bots become available."""
+        while self.is_processing_jobs:
+            try:
+                if self.job_queue:
+                    # Try to assign a bot to the next job
+                    bot_data = self.get_available_bot()
+                    if bot_data:
+                        # Get the next job from queue
+                        job_data = self.job_queue.pop(0)
+                        job_id = job_data['job_id']
+                        
+                        # Assign bot to job
+                        self.active_jobs[job_id] = bot_data['bot_id']
+                        
+                        # Update job status
+                        job_data['status'] = 'processing'
+                        job_data['assigned_bot'] = bot_data['bot_id']
+                        job_data['started_at'] = datetime.now().isoformat()
+                        
+                        # Start processing the job with the assigned bot
+                        logger.info(f"Job {job_id} assigned to bot {bot_data['bot_id']}")
+                        self._process_job_with_bot(job_data, bot_data)
+                    else:
+                        # No bots available, wait a bit
+                        time.sleep(2)
+                else:
+                    # No jobs in queue, wait a bit
+                    time.sleep(1)
+                    
+            except Exception as e:
+                logger.error(f"Error in job processing: {e}")
+                time.sleep(5)
+    
+    def _process_job_with_bot(self, job_data: dict, bot_data: dict):
+        """
+        Process a job using the assigned bot.
+        This method performs the actual Instagram analysis.
+        """
+        job_id = job_data['job_id']
+        target_user_id = job_data['target_user_id']
+        job_type = job_data.get('job_type', 'analyze')
+        
+        try:
+            logger.info(f"Processing job {job_id} with bot {bot_data['bot_id']}")
+            
+            # Get the bot slave instance
+            bot_id = bot_data['bot_id']
+            bot_slave = self.bot_slaves.get(bot_id)
+            
+            if not bot_slave:
+                raise ValueError(f"Bot {bot_id} not found")
+            
+            # Mark bot as busy
+            bot_slave.is_busy = True
+            bot_slave.last_activity = datetime.now()
+            
+            # Perform Instagram analysis based on job type
+            if job_type == 'analyze_not_following_back':
+                result = self._analyze_not_following_back(bot_slave, target_user_id)
+            else:  # Default to regular analyze
+                previous_followers = job_data.get('previous_followers', [])
+                result = self._analyze_followers(bot_slave, target_user_id, previous_followers)
+            
+            # Update job status with results
+            job_data['status'] = 'completed'
+            job_data['result'] = result
+            job_data['completed_at'] = datetime.now().isoformat()
+            
+            # Store in completed jobs for status tracking
+            self.completed_jobs[job_id] = job_data
+            
+            logger.info(f"Job {job_id} completed successfully")
+            
+        except Exception as e:
+            logger.error(f"Error processing job {job_id}: {e}")
+            job_data['status'] = 'failed'
+            job_data['error'] = str(e)
+            job_data['failed_at'] = datetime.now().isoformat()
+            
+            # Store failed job in completed jobs for status tracking
+            self.completed_jobs[job_id] = job_data
+        
+        finally:
+            # Release the bot
+            if bot_id in self.bot_slaves:
+                self.bot_slaves[bot_id].is_busy = False
+                self.bot_slaves[bot_id].last_activity = datetime.now()
+            
+            # Remove from active jobs
+            if job_id in self.active_jobs:
+                del self.active_jobs[job_id]
+    
+    def _analyze_followers(self, bot_slave, target_user_id: str, previous_followers: list = None) -> dict:
+        """Analyze followers using the bot slave."""
+        try:
+            logger.info(f"Analyzing followers for user {target_user_id}")
+            
+            # Get persistent scraper for this bot
+            scraper = bot_slave.get_scraper(target_user_id)
+            
+            # Fetch data using bot account
+            followers = scraper.extract_usernames(scraper.get_followers())
+            following = scraper.extract_usernames(scraper.get_following())
+
+            # Get bot data for result
+            bot_data = bot_slave.get_session_data()
+
+            # Format result
+            result = {
+                'target_user_id': target_user_id,
+                'followers_count': len(followers),
+                'following_count': len(following),
+                'followers': followers,
+                'following': following,
+                'analysis_completed_at': datetime.now().isoformat(),
+                'bot_account_used': bot_data['bot_id'],
+                'analysis_type': 'followers'
+            }
+            
+            # Compare with previous followers to find unfollowers
+            if previous_followers:                
+                previous_set = set(previous_followers)
+                current_set = set(followers)
+                unfollowers = list(current_set - previous_set)
+                result['unfollowers'] = unfollowers
+            
+            logger.info(f"Follower analysis completed.")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error analyzing followers: {e}")
+            raise
+    
+    def _analyze_not_following_back(self, bot_slave, target_user_id: str) -> dict:
+        """Analyze users who don't follow back using the bot slave."""
+        try:
+            logger.info(f"Analyzing users who don't follow back for user {target_user_id}")
+            
+            # Get persistent scraper for this bot
+            scraper = bot_slave.get_scraper(target_user_id)
+            
+            # Get bot data for result
+            bot_data = bot_slave.get_session_data()
+            
+            # Fetch current followers
+            followers = scraper.get_followers()
+            following = scraper.get_following()
+            not_following_back = self._find_non_follow_backs(
+                scraper.extract_usernames(followers), 
+                scraper.extract_usernames(following))
+            
+            # Format result
+            result = {
+                'target_user_id': target_user_id,
+                'followers_count': len(followers),
+                'not_following_back_count': len(not_following_back),
+                'not_following_back': not_following_back,
+                'analysis_completed_at': datetime.now().isoformat(),
+                'bot_account_used': bot_data['bot_id'],
+                'analysis_type': 'not_following_back'
+            }
+            
+            logger.info(f"Not following back analysis completed: {len(not_following_back)} users found who don't follow back")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error analyzing users who don't follow back: {e}")
+            raise
+    
+    def _find_non_follow_backs(self, followers: list, following: list) -> list:
+        """Find users who don't follow back"""
+        follower_set = set(followers)
+        following_set = set(following)
+        not_following_back = list(following_set - follower_set)
+        
+        return not_following_back
+    
+    def get_job_status(self, job_id: str) -> Optional[dict]:
+        """Get the status of a specific job."""
+        logger.debug(f"Getting status for job {job_id}")
+        logger.debug(f"Queue length: {len(self.job_queue)}, Active jobs: {len(self.active_jobs)}, Completed jobs: {len(self.completed_jobs)}")
+        
+        # Check if job is in queue
+        for job in self.job_queue:
+            if job['job_id'] == job_id:
+                logger.debug(f"Job {job_id} found in queue")
+                return {
+                    'job_id': job_id,
+                    'status': 'queued',
+                    'position_in_queue': self.job_queue.index(job) + 1,
+                    'estimated_wait_time': self._estimate_wait_time(),
+                    'message': 'Job is waiting in queue for available bot'
+                }
+        
+        # Check if job is active
+        if job_id in self.active_jobs:
+            logger.debug(f"Job {job_id} found in active jobs")
+            return {
+                'job_id': job_id,
+                'status': 'processing',
+                'assigned_bot': self.active_jobs[job_id],
+                'position_in_queue': 0,
+                'message': 'Job is currently being processed by bot'
+            }
+        
+        # Check if job is completed
+        if job_id in self.completed_jobs:
+            job_data = self.completed_jobs[job_id]
+            logger.debug(f"Job {job_id} found in completed jobs with status: {job_data.get('status')}")
+            return {
+                'job_id': job_id,
+                'status': job_data.get('status', 'completed'),
+                'result': job_data.get('result'),
+                'error': job_data.get('error'),
+                'completed_at': job_data.get('completed_at'),
+                'message': 'Job has been completed'
+            }
+        
+        logger.debug(f"Job {job_id} not found anywhere")
+        return None
+    
+    def complete_job(self, job_id: str):
+        """Mark a job as completed and release the bot."""
+        if job_id in self.active_jobs:
+            bot_id = self.active_jobs[job_id]
+            self.release_bot(bot_id)
+            del self.active_jobs[job_id]
+            logger.info(f"Job {job_id} completed, bot {bot_id} released")
+    
+    def _estimate_wait_time(self) -> int:
+        """Estimate wait time in seconds based on queue length and bot availability."""
+        if not self.job_queue:
+            return 0
+        
+        # Simple estimation: assume each job takes 5 minutes on average
+        avg_job_time = 300  # 5 minutes
+        available_bots = len([b for b in self.bot_slaves.values() if not b.is_busy and b.is_healthy()])
+        
+        if available_bots == 0:
+            # If no bots available, estimate based on queue length
+            return len(self.job_queue) * avg_job_time
+        else:
+            # If bots available, estimate based on queue position
+            return (len(self.job_queue) - 1) * avg_job_time // available_bots
+    
     def release_bot(self, bot_id: str):
         """Release a bot back to the pool."""
         if bot_id in self.bot_slaves:
@@ -612,7 +1064,7 @@ class InstagramBotSlaveManager:
         
         @self.app.route('/api/bot/request', methods=['POST'])
         def request_bot():
-            """Request an available bot session."""
+            """Request an available bot session (legacy endpoint)."""
             try:
                 bot_data = self.get_available_bot()
                 if bot_data:
@@ -630,6 +1082,62 @@ class InstagramBotSlaveManager:
                     'success': False,
                     'error': str(e)
                 }), 500
+        
+        @self.app.route('/api/job/submit', methods=['POST'])
+        def submit_job():
+            """Submit a job to the queue system."""
+            try:
+                data = request.json
+                if not data:
+                    return jsonify({'error': 'No job data provided'}), 400
+                
+                result = self.submit_job(data)
+                return jsonify(result)
+            except Exception as e:
+                return jsonify({'error': str(e)}), 500
+        
+        @self.app.route('/api/job/status/<job_id>', methods=['GET'])
+        def get_job_status_endpoint(job_id):
+            """Get the status of a specific job."""
+            try:
+                status = self.get_job_status(job_id)
+                if status:
+                    return jsonify(status)
+                else:
+                    # Job not found - return 200 with appropriate status
+                    return jsonify({
+                        'job_id': job_id,
+                        'status': 'not_found',
+                        'message': 'Job not found in queue or completed jobs'
+                    }), 200
+            except Exception as e:
+                return jsonify({'error': str(e)}), 500
+        
+        @self.app.route('/api/job/complete', methods=['POST'])
+        def complete_job():
+            """Mark a job as completed."""
+            try:
+                data = request.json
+                if not data or 'job_id' not in data:
+                    return jsonify({'error': 'job_id required'}), 400
+                
+                self.complete_job(data['job_id'])
+                return jsonify({'success': True})
+            except Exception as e:
+                return jsonify({'error': str(e)}), 500
+        
+        @self.app.route('/api/queue/status', methods=['GET'])
+        def get_queue_status():
+            """Get the current queue status."""
+            try:
+                return jsonify({
+                    'queue_length': len(self.job_queue),
+                    'active_jobs': len(self.active_jobs),
+                    'available_bots': len([b for b in self.bot_slaves.values() if not b.is_busy and b.is_healthy()]),
+                    'total_bots': len(self.bot_slaves)
+                })
+            except Exception as e:
+                return jsonify({'error': str(e)}), 500
         
         @self.app.route('/api/bot/release', methods=['POST'])
         def release_bot():
@@ -710,8 +1218,13 @@ class InstagramBotSlaveManager:
     def cleanup(self):
         """Cleanup all resources."""
         self.is_monitoring = False
+        self.is_processing_jobs = False
+        
         if self.monitoring_thread:
             self.monitoring_thread.join(timeout=5)
+        
+        if self.job_processing_thread:
+            self.job_processing_thread.join(timeout=5)
         
         for bot_slave in self.bot_slaves.values():
             bot_slave.cleanup()

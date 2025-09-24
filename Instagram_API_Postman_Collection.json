@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "instagram-follower-api",
 		"name": "Instagram Follower Analysis API",
-		"description": "API for analyzing Instagram followers and finding users who don't follow back. Now uses bot accounts for session management - users only need to provide target_user_id.",
+		"description": "API for analyzing Instagram followers and finding users who don't follow back. Uses bot accounts for session management - users only need to provide target_user_id.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
@@ -16,20 +16,15 @@
 						"header": [],
 						"url": {
 							"raw": "{{main_api_url}}/api/health",
-							"host": [
-								"{{main_api_url}}"
-							],
-							"path": [
-								"api",
-								"health"
-							]
+							"host": ["{{main_api_url}}"],
+							"path": ["api", "health"]
 						},
 						"description": "Check if the main API server is running and healthy. Also shows bot manager connection status."
 					},
 					"response": []
 				},
 				{
-					"name": "Submit Analysis Job (Simplified)",
+					"name": "Submit Follower Analysis Job",
 					"request": {
 						"method": "POST",
 						"header": [
@@ -40,24 +35,52 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"target_user_id\": \"123456789\"\n}"
+							"raw": "{\n    \"target_user_id\": \"{{target_user_id}}\",\n    \"previous_followers\": [\n        \"{{previous_follower_1}}\",\n        \"{{previous_follower_2}}\",\n        \"{{previous_follower_3}}\"\n    ]\n}"
 						},
 						"url": {
 							"raw": "{{main_api_url}}/api/analyze",
-							"host": [
-								"{{main_api_url}}"
-							],
-							"path": [
-								"api",
-								"analyze"
-							]
+							"host": ["{{main_api_url}}"],
+							"path": ["api", "analyze"]
 						},
-						"description": "Submit a new Instagram follower analysis job. Only requires target_user_id - bot accounts handle session management automatically."
+						"description": "Submit a new Instagram follower analysis job. Returns complete followers and following lists. Optionally include previous_followers to detect unfollowers. Bot accounts handle session management automatically."
 					},
-					"response": []
+					"response": [
+						{
+							"name": "Success Response",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"target_user_id\": \"123456789\"\n}"
+								},
+								"url": {
+									"raw": "{{main_api_url}}/api/analyze",
+									"host": ["{{main_api_url}}"],
+									"path": ["api", "analyze"]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"job_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"status\": \"queued\",\n    \"position_in_queue\": 1,\n    \"estimated_wait_time\": \"Starting in ~2 minutes\"\n}"
+						}
+					]
 				},
 				{
-					"name": "Submit Un-followers Analysis Job (Simplified)",
+					"name": "Submit Not-Following-Back Analysis Job",
 					"request": {
 						"method": "POST",
 						"header": [
@@ -68,21 +91,49 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"target_user_id\": \"123456789\",\n    \"previous_followers\": [\n        \"username1\",\n        \"username2\",\n        \"username3\"\n    ]\n}"
+							"raw": "{\n    \"target_user_id\": \"{{target_user_id}}\"\n}"
 						},
 						"url": {
-							"raw": "{{main_api_url}}/api/analyze-unfollowers",
-							"host": [
-								"{{main_api_url}}"
-							],
-							"path": [
-								"api",
-								"analyze-unfollowers"
-							]
+							"raw": "{{main_api_url}}/api/analyze-not-following-back",
+							"host": ["{{main_api_url}}"],
+							"path": ["api", "analyze-not-following-back"]
 						},
-						"description": "Submit a new Instagram un-followers analysis job. Compares previous followers list with current followers to find users who unfollowed."
+						"description": "Submit a new Instagram not-following-back analysis job. Finds users who don't follow back. Only requires target_user_id - bot accounts handle session management automatically."
 					},
-					"response": []
+					"response": [
+						{
+							"name": "Success Response",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"target_user_id\": \"123456789\",\n    \"previous_followers\": [\"user1\", \"user2\", \"user3\"]\n}"
+								},
+								"url": {
+									"raw": "{{main_api_url}}/api/analyze-not-following-back",
+									"host": ["{{main_api_url}}"],
+									"path": ["api", "analyze-not-following-back"]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"job_id\": \"b2c3d4e5-f6g7-8901-bcde-f23456789012\",\n    \"status\": \"queued\",\n    \"position_in_queue\": 2,\n    \"estimated_wait_time\": \"Starting in ~4 minutes\"\n}"
+						}
+					]
 				},
 				{
 					"name": "Get Job Status",
@@ -91,18 +142,36 @@
 						"header": [],
 						"url": {
 							"raw": "{{main_api_url}}/api/status/{{job_id}}",
-							"host": [
-								"{{main_api_url}}"
-							],
-							"path": [
-								"api",
-								"status",
-								"{{job_id}}"
-							]
+							"host": ["{{main_api_url}}"],
+							"path": ["api", "status", "{{job_id}}"]
 						},
 						"description": "Get the status of a job by job_id. The job_id is returned from the analyze endpoints."
 					},
-					"response": []
+					"response": [
+						{
+							"name": "Completed Job Response",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{main_api_url}}/api/status/a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+									"host": ["{{main_api_url}}"],
+									"path": ["api", "status", "a1b2c3d4-e5f6-7890-abcd-ef1234567890"]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"status\": \"completed\",\n    \"target_user_id\": \"123456789\",\n    \"job_type\": \"analyze\",\n    \"created_at\": 1704067200,\n    \"position_in_queue\": 0,\n    \"result\": {\n        \"target_user_id\": \"123456789\",\n        \"followers_count\": 1500,\n        \"following_count\": 800,\n        \"followers\": [\"user1\", \"user2\", \"user3\"],\n        \"following\": [\"user4\", \"user5\", \"user6\"],\n        \"analysis_completed_at\": \"2024-01-01T12:00:00\",\n        \"bot_account_used\": \"bot_1\",\n        \"analysis_type\": \"followers\"\n    }\n}"
+						}
+					]
 				},
 				{
 					"name": "Get Queue Status",
@@ -111,13 +180,8 @@
 						"header": [],
 						"url": {
 							"raw": "{{main_api_url}}/api/queue",
-							"host": [
-								"{{main_api_url}}"
-							],
-							"path": [
-								"api",
-								"queue"
-							]
+							"host": ["{{main_api_url}}"],
+							"path": ["api", "queue"]
 						},
 						"description": "Get overall queue status (counts only, no sensitive data)"
 					},
@@ -135,14 +199,8 @@
 						"header": [],
 						"url": {
 							"raw": "{{bot_manager_url}}/api/bot/health",
-							"host": [
-								"{{bot_manager_url}}"
-							],
-							"path": [
-								"api",
-								"bot",
-								"health"
-							]
+							"host": ["{{bot_manager_url}}"],
+							"path": ["api", "bot", "health"]
 						},
 						"description": "Check if the bot manager is running and healthy. Shows total bots and monitoring status."
 					},
@@ -155,159 +213,14 @@
 						"header": [],
 						"url": {
 							"raw": "{{bot_manager_url}}/api/bot/status",
-							"host": [
-								"{{bot_manager_url}}"
-							],
-							"path": [
-								"api",
-								"bot",
-								"status"
-							]
+							"host": ["{{bot_manager_url}}"],
+							"path": ["api", "bot", "status"]
 						},
-						"description": "Get status of all bot slaves. Shows which bots are logged in, busy, healthy, and available."
-					},
-					"response": []
-				},
-				{
-					"name": "Request Bot Session",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{}"
-						},
-						"url": {
-							"raw": "{{bot_manager_url}}/api/bot/request",
-							"host": [
-								"{{bot_manager_url}}"
-							],
-							"path": [
-								"api",
-								"bot",
-								"request"
-							]
-						},
-						"description": "Request an available bot session. Returns bot session data including CSRF token, session ID, and cookies. This is used internally by the main API server."
-					},
-					"response": []
-				},
-				{
-					"name": "Release Bot Session",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"bot_id\": \"bot_1\"\n}"
-						},
-						"url": {
-							"raw": "{{bot_manager_url}}/api/bot/release",
-							"host": [
-								"{{bot_manager_url}}"
-							],
-							"path": [
-								"api",
-								"bot",
-								"release"
-							]
-						},
-						"description": "Release a bot session back to the pool. This is used internally by the main API server after completing a job."
+						"description": "Get detailed status of all bot accounts. Shows which bots are available, busy, or logged in."
 					},
 					"response": []
 				}
 			]
-		},
-		{
-			"name": "Legacy API (Old System)",
-			"item": [
-				{
-					"name": "Submit Analysis Job (Legacy)",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"csrf_token\": \"{{csrf_token}}\",\n    \"session_id\": \"{{session_id}}\"\n}"
-						},
-						"url": {
-							"raw": "{{main_api_url}}/api/analyze",
-							"host": [
-								"{{main_api_url}}"
-							],
-							"path": [
-								"api",
-								"analyze"
-							]
-						},
-						"description": "Legacy endpoint - requires user's own session credentials. Use the simplified version above instead."
-					},
-					"response": []
-				},
-				{
-					"name": "Submit Un-followers Analysis Job (Legacy)",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"csrf_token\": \"{{csrf_token}}\",\n    \"session_id\": \"{{session_id}}\",\n    \"previous_followers\": [\n        \"username1\",\n        \"username2\",\n        \"username3\"\n    ]\n}"
-						},
-						"url": {
-							"raw": "{{main_api_url}}/api/analyze-unfollowers",
-							"host": [
-								"{{main_api_url}}"
-							],
-							"path": [
-								"api",
-								"analyze-unfollowers"
-							]
-						},
-						"description": "Legacy endpoint - requires user's own session credentials. Use the simplified version above instead."
-					},
-					"response": []
-				}
-			]
-		}
-	],
-	"event": [
-		{
-			"listen": "prerequest",
-			"script": {
-				"type": "text/javascript",
-				"exec": [
-					""
-				]
-			}
-		},
-		{
-			"listen": "test",
-			"script": {
-				"type": "text/javascript",
-				"exec": [
-					""
-				]
-			}
 		}
 	],
 	"variable": [
@@ -324,22 +237,34 @@
 			"description": "Bot manager API URL"
 		},
 		{
+			"key": "target_user_id",
+			"value": "123456789",
+			"type": "string",
+			"description": "Instagram user ID to analyze (numeric)"
+		},
+		{
 			"key": "job_id",
 			"value": "YOUR_JOB_ID_HERE",
 			"type": "string",
 			"description": "Job ID returned from analyze endpoints"
 		},
 		{
-			"key": "csrf_token",
-			"value": "YOUR_CSRF_TOKEN_HERE",
+			"key": "previous_follower_1",
+			"value": "username1",
 			"type": "string",
-			"description": "Legacy - CSRF token for old API (not needed for new bot system)"
+			"description": "Previous follower username (for not-following-back analysis)"
 		},
 		{
-			"key": "session_id",
-			"value": "YOUR_SESSION_ID_HERE",
+			"key": "previous_follower_2",
+			"value": "username2",
 			"type": "string",
-			"description": "Legacy - Session ID for old API (not needed for new bot system)"
+			"description": "Previous follower username (for not-following-back analysis)"
+		},
+		{
+			"key": "previous_follower_3",
+			"value": "username3",
+			"type": "string",
+			"description": "Previous follower username (for not-following-back analysis)"
 		}
 	]
 }
