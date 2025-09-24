@@ -1,55 +1,58 @@
-# Instagram Follower Analysis Tool
+# Instagram Follower Analysis API
 
-A comprehensive tool for analyzing Instagram followers and finding users who don't follow you back. Available as both a **command-line tool** and a **REST API server**.
+A production-ready REST API server for analyzing Instagram followers and finding users who don't follow you back. Built with Flask and bot session management.
 
 ## 🎯 What This Tool Does
 
-### **Command-Line Tool:**
-1. **Collects your complete Instagram data** using Instagram's internal API
-2. **Compares followers vs following** to find users who don't follow you back
-3. **Generates a clean text file** with the list of non-followers
-
-### **REST API Server:**
-1. **Server-side processing** - Submit jobs via HTTP API
-2. **Concurrent processing** - Handle multiple users simultaneously
-3. **Job management** - Track status, queue, and results
-4. **Production ready** - Built with Flask and proper MVC architecture
+### **Bot-Powered Analysis:**
+1. **Persistent bot sessions** - Bot accounts stay logged in automatically
+2. **Simplified user experience** - Users only need to provide target user ID
+3. **Concurrent processing** - Handle multiple users simultaneously
+4. **Job management** - Track status, queue, and results
+5. **Production ready** - Built with Flask and proper MVC architecture
 
 ## 🚀 Quick Start
 
-### **Option 1: Command-Line Tool (Local)**
+### **1. Start Bot Manager**
 ```bash
-# Complete automated workflow
-python run_instagram_analysis.py
+# Start the bot slave manager (handles Instagram sessions)
+python instagram_bot_manager.py
 ```
 
-### **Option 2: API Server (Production)**
+### **2. Start API Server**
 ```bash
-# Start the API server
+# Start the main API server
 python instagram_api_server.py
+```
 
-# Submit analysis job via API
+### **3. Submit Analysis Job**
+```bash
+# Basic follower analysis (with optional unfollower detection)
 curl -X POST http://localhost:5000/api/analyze \
   -H "Content-Type: application/json" \
-  -d '{"csrf_token": "your_token", "session_id": "your_session"}'
+  -d '{"target_user_id": "123456789", "previous_followers": ["user1", "user2", ...]}'
+
+# Not-following-back analysis (only target_user_id needed!)
+curl -X POST http://localhost:5000/api/analyze-not-following-back \
+  -H "Content-Type: application/json" \
+  -d '{"target_user_id": "123456789"}'
 ```
 
 ## 📁 Project Structure
 
-### **Command-Line Tools:**
-- **`run_instagram_analysis.py`** - Complete automated workflow runner
-- **`get_instagram_credentials.py`** - Simplified credentials input (only 2 values!)
+### **Core API Files:**
+- **`instagram_api_server.py`** - Main Flask REST API server
+- **`instagram_bot_manager.py`** - Bot session management service
 - **`instagram_api_scraper.py`** - Core Instagram data collection
-- **`compare_followers.py`** - Data comparison and analysis
-
-### **API Server:**
-- **`instagram_api_server.py`** - Flask REST API server with MVC architecture
 - **`requirements.txt`** - Python dependencies
-- **`API_README.md`** - Complete API documentation
+
+### **Configuration:**
+- **`bot_config.yaml`** - Bot account configuration
+- **`bot_config/`** - Bot session data storage
 - **`Instagram_API_Postman_Collection.json`** - Postman collection for testing
 
-### **Configuration & Documentation:**
-- **`.gitignore`** - Comprehensive security patterns
+### **Documentation:**
+- **`README.md`** - This comprehensive guide
 - **`SECURITY.md`** - Security guidelines and best practices
 
 ## 🔒 Security & Privacy Features
